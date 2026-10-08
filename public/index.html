@@ -190,7 +190,9 @@
         </div>
       </section>
 
-      <section id="sessionSection" class="hidden bg-slate-900/90 rounded-2xl p-5 border border-slate-800 shadow-xl relative overflow-hidden backdrop-blur-sm">
+      <button id="btnOpenSession" type="button" class="hidden w-full py-4 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-lg shadow-xl cursor-pointer">+ 🍔 Ajouter une séance</button>
+      <div id="sessionModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-start sm:items-center justify-center p-4 overflow-y-auto">
+      <section id="sessionSection" class="w-full max-w-lg bg-slate-900 rounded-2xl p-5 border border-slate-700 shadow-2xl relative overflow-hidden">
         <div class="absolute -right-12 -top-12 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl pointer-events-none"></div>
         
         <div class="flex items-center justify-between mb-4">
@@ -199,6 +201,7 @@
             Nouvelle Séance d'EPS
           </h2>
           <span class="text-xs text-slate-400 font-mono" id="todayDate"></span>
+          <button id="btnCloseSession" type="button" class="ml-2 text-slate-400 hover:text-white text-xl leading-none cursor-pointer" aria-label="Fermer">✕</button>
         </div>
 
         <form id="sessionForm" class="space-y-4">
@@ -312,6 +315,7 @@
           </button>
         </form>
       </section>
+      </div>
 
       <section id="journalSection" class="hidden bg-slate-900/90 rounded-2xl p-5 border border-slate-800 shadow-xl backdrop-blur-sm flex flex-col">
         <div class="flex items-center justify-between mb-3">
@@ -1352,6 +1356,12 @@
     }
 
     // Deux pages distinctes : « collective » (cumul public) et « space » (espace de l'établissement).
+    function closeSessionModal() { document.getElementById('sessionModal').classList.add('hidden'); }
+    document.getElementById('btnOpenSession').addEventListener('click', () => document.getElementById('sessionModal').classList.remove('hidden'));
+    document.getElementById('btnCloseSession').addEventListener('click', closeSessionModal);
+    document.getElementById('sessionModal').addEventListener('click', e => { if (e.target.id === 'sessionModal') closeSessionModal(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSessionModal(); });
+
     let page = 'collective';
 
     function setPage(p) {
@@ -1392,7 +1402,8 @@
       teacherBar.classList.toggle('hidden', !user);
       const verified = !!(user && user.emailVerified);
       document.getElementById('verifyCard').classList.toggle('hidden', !(user && !verified));
-      sessionSection.classList.toggle('hidden', !verified);
+      document.getElementById('btnOpenSession').classList.toggle('hidden', !verified);
+      if (!verified) closeSessionModal();
       journalSection.classList.toggle('hidden', !verified);
       if (user && !verified) document.getElementById('verifyEmail').textContent = user.email || '';
       // Établissement confirmé : on ouvre automatiquement son écran (une fois par connexion).
@@ -1442,6 +1453,7 @@
       btnAddSession.disabled = true;
       try {
         await store.addSession(session);
+        closeSessionModal();
         playSound('rocket');
         triggerBurgerLaunchParticles(current.burgers);
         showToast(
