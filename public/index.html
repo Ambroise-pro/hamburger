@@ -93,7 +93,7 @@
     ::placeholder { color: #8795A8 !important; }
     ::-webkit-scrollbar-track { background: #EEF2F7; }
     ::-webkit-scrollbar-thumb { background: #C9D3E0; }
-    #sceneBox { background: #0B1220 !important; border-color: #0E1A2B !important; }
+    #sceneBox { background: #EEF5FD !important; border-color: #E1E7EF !important; }
     .tab-on { background: #0E1A2B; color: #FFFFFF !important; }
     .tab-off { color: #0E1A2B !important; }
     .tab-off:hover { background: #E3E9F1; }
@@ -1558,7 +1558,7 @@
     }
 
     const canvas = document.getElementById('spaceCanvas');
-    const ctx = canvas.getContext('2d');
+    let ctx = canvas.getContext('2d'); // « let » : remplacé temporairement pour dessiner les silhouettes
 
     let canvasWidth = 0;
     let canvasHeight = 0;
@@ -1612,24 +1612,25 @@
 
     function drawGround(groundY) {
       const grass = ctx.createLinearGradient(0, groundY, 0, canvasHeight - 22);
-      grass.addColorStop(0, '#22c55e');
-      grass.addColorStop(1, '#14532d');
+      grass.addColorStop(0, '#B9D89C');
+      grass.addColorStop(1, '#93BF74');
       ctx.fillStyle = grass;
       ctx.fillRect(0, groundY, canvasWidth, canvasHeight - 22 - groundY);
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(0, groundY); ctx.lineTo(canvasWidth, groundY); ctx.stroke();
 
-      ctx.fillStyle = '#b91c1c';
+      ctx.fillStyle = '#D9825B';
       ctx.fillRect(0, canvasHeight - 22, canvasWidth, 22);
-
-      ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+      ctx.strokeStyle = 'rgba(255,255,255,0.7)';
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(0, canvasHeight - 11);
       ctx.lineTo(canvasWidth, canvasHeight - 11);
       ctx.stroke();
-
-      ctx.fillStyle = '#f8fafc';
-      ctx.font = '10px sans-serif';
-      ctx.fillText('🏃 Terrain EPS & Piste', 12, canvasHeight - 6);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = '600 10px "DM Sans", sans-serif';
+      ctx.fillText('Terrain EPS', 12, canvasHeight - 6);
     }
 
     function drawVectorBigMac(x, y, scale = 1, showGlow = false) {
@@ -1711,44 +1712,92 @@
     }
     function paintObjectLabel(x, y, text, reached) {
       ctx.save();
-      ctx.font = 'bold 10px sans-serif';
-      const pad = 6;
-      const tw = ctx.measureText(text).width;
+      ctx.font = '700 11px "DM Sans", sans-serif';
+      const label = reached ? '✓ ' + text : text;
+      const pad = 8;
+      const tw = ctx.measureText(label).width;
       const boxX = Math.max(6, Math.min(canvasWidth - tw - pad * 2 - 62, x - tw / 2 - pad));
-      const boxY = Math.max(6, y - 24);
-      ctx.fillStyle = reached ? 'rgba(120,53,15,0.88)' : 'rgba(15,23,42,0.82)';
-      ctx.strokeStyle = reached ? '#f59e0b' : '#475569';
-      ctx.lineWidth = 1;
+      const boxY = Math.max(6, y - 26);
+      ctx.fillStyle = reached ? '#FFF4E0' : '#FFFFFF';
+      ctx.strokeStyle = reached ? '#E8890C' : '#C9D3E0';
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.roundRect(boxX, boxY, tw + pad * 2, 18, 6);
+      ctx.roundRect(boxX, boxY, tw + pad * 2, 20, 10);
       ctx.fill(); ctx.stroke();
-      ctx.fillStyle = reached ? '#fef3c7' : '#cbd5e1';
-      ctx.fillText(text, boxX + pad, boxY + 12);
+      ctx.fillStyle = reached ? '#8A4A00' : INK;
+      ctx.fillText(label, boxX + pad, boxY + 14);
       ctx.restore();
+    }
+
+    // ---- Style commun des objectifs dessinés ----
+    // Objectif atteint : couleurs pleines et contour encre. Objectif à atteindre : silhouette unie gris-bleu.
+    const GHOST = '#CCD7E4';
+    const INK = '#0E1A2B';
+    function beginObj(reached, h) {
+      ctx.save();
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.lineWidth = Math.max(1.2, Math.min(2.6, h * 0.012));
+      ctx.strokeStyle = INK;
+    }
+    function paint(color, reached) {
+      ctx.fillStyle = reached ? color : GHOST;
+      ctx.fill();
+      if (reached) ctx.stroke();
+    }
+    function groundShadow(x, groundY, w) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(14, 26, 43, 0.14)';
+      ctx.beginPath();
+      ctx.ellipse(x, groundY, w / 2, Math.max(2, w * 0.07), 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Dessine un repère non atteint en silhouette unie (même rendu que les objectifs de l'établissement).
+    const ghostCanvas = document.createElement('canvas');
+    function asGhost(draw) {
+      const main = ctx;
+      ghostCanvas.width = canvas.width;
+      ghostCanvas.height = canvas.height;
+      const g = ghostCanvas.getContext('2d');
+      g.setTransform(main.getTransform());
+      ctx = g;
+      try { draw(); } finally { ctx = main; }
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.globalAlpha = 1;
+      for (let i = 0; i < 4; i++) g.drawImage(ghostCanvas, 0, 0); // rend la silhouette opaque, détails compris
+      g.globalCompositeOperation = 'source-in';
+      g.fillStyle = GHOST;
+      g.fillRect(0, 0, ghostCanvas.width, ghostCanvas.height);
+      main.save();
+      main.setTransform(1, 0, 0, 1, 0, 0);
+      main.drawImage(ghostCanvas, 0, 0);
+      main.restore();
     }
 
     function drawCollege(x, groundY, topY, reached) {
       const h = Math.max(6, groundY - topY);
-      const w = Math.min(canvasWidth * 0.36, h * 3.2); // ~ bâtiment 3 fois plus large que haut
-      ctx.save();
-      ctx.globalAlpha = reached ? 0.95 : 0.48;
-      ctx.fillStyle = reached ? '#c2410c' : '#475569';
-      ctx.fillRect(x - w/2, groundY - h * 0.72, w, h * 0.72);
-      ctx.fillStyle = reached ? '#fb923c' : '#64748b';
-      ctx.beginPath();
-      ctx.moveTo(x - w/2 - 5, groundY - h * 0.72);
-      ctx.lineTo(x, groundY - h);
-      ctx.lineTo(x + w/2 + 5, groundY - h * 0.72);
-      ctx.closePath(); ctx.fill();
-      ctx.fillStyle = '#bae6fd';
-      const rows=2, cols=4;
-      for(let r=0;r<rows;r++) for(let c=0;c<cols;c++) {
-        ctx.fillRect(x-w*0.38+c*w*0.22, groundY-h*0.60+r*h*0.22, w*0.11, Math.max(4,h*0.10));
+      const w = Math.min(canvasWidth * 0.36, h * 3.2);
+      groundShadow(x, groundY, w * 1.1);
+      beginObj(reached, h);
+      const roofH = Math.max(3, h * 0.1);
+      // corps du bâtiment (toit plat)
+      ctx.beginPath(); ctx.rect(x - w / 2, topY + roofH, w, groundY - topY - roofH); paint('#F1DDBB', reached);
+      ctx.beginPath(); ctx.rect(x - w / 2 - 4, topY, w + 8, roofH); paint('#B45309', reached);
+      // fenêtres sur trois niveaux
+      const cols = 6, rows = 3;
+      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+        if (r === rows - 1 && (c === 2 || c === 3)) continue;
+        const ww = w / cols * 0.5;
+        const wx = x - w / 2 + w * (c + 0.25) / cols;
+        const wy = topY + roofH + h * (0.1 + r * 0.27);
+        ctx.beginPath(); ctx.rect(wx, wy, ww, h * 0.15); paint('#BFE3FA', reached);
       }
-      ctx.fillStyle = '#1e293b';
-      ctx.fillRect(x-7, groundY-Math.max(14,h*0.28), 14, Math.max(14,h*0.28));
+      // porte vitrée
+      ctx.beginPath(); ctx.rect(x - w * 0.07, groundY - h * 0.26, w * 0.14, h * 0.26); paint('#0E7490', reached);
       ctx.restore();
-      drawObjectLabel(x, groundY-h-4, 'Collège / Lycée · 10 m', reached);
+      drawObjectLabel(x, topY - 4, 'Collège / Lycée · 10 m', reached);
     }
 
     function drawStatueOfLiberty(x, groundY, topY, reached) {
@@ -1976,44 +2025,44 @@
 
     function drawPerson(x, groundY, topY, reached, o) {
       const h = Math.max(6, groundY - topY);
-      const headR = h * 0.075;
-      const bodyTop = topY + headR * 2 + h * 0.01;
-      const hipY = groundY - h * 0.46;
-      ctx.save();
-      ctx.globalAlpha = reached ? 0.97 : 0.55;
-      ctx.lineCap = 'round';
-      // jambes
-      ctx.strokeStyle = reached ? o.trousers : '#475569';
-      ctx.lineWidth = Math.max(2, h * 0.075);
-      ctx.beginPath();
-      ctx.moveTo(x - h * 0.05, hipY); ctx.lineTo(x - h * 0.07, groundY - 2);
-      ctx.moveTo(x + h * 0.05, hipY); ctx.lineTo(x + h * 0.07, groundY - 2);
-      ctx.stroke();
-      // torse et bras
-      ctx.fillStyle = reached ? o.shirt : '#64748b';
-      ctx.beginPath();
-      ctx.roundRect(x - h * 0.13, bodyTop, h * 0.26, hipY - bodyTop + 2, h * 0.05);
-      ctx.fill();
-      ctx.strokeStyle = reached ? o.shirt : '#64748b';
-      ctx.lineWidth = Math.max(2, h * 0.055);
-      ctx.beginPath();
-      ctx.moveTo(x - h * 0.13, bodyTop + h * 0.04); ctx.lineTo(x - h * 0.2, hipY - h * 0.02);
-      ctx.moveTo(x + h * 0.13, bodyTop + h * 0.04); ctx.lineTo(x + h * 0.2, hipY - h * 0.02);
-      ctx.stroke();
-      // tête et cheveux
-      ctx.fillStyle = reached ? '#f5c9a0' : '#94a3b8';
-      ctx.beginPath(); ctx.arc(x, topY + headR, headR, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = reached ? o.hair : '#475569';
-      ctx.beginPath(); ctx.arc(x, topY + headR, headR, Math.PI, 0); ctx.fill();
+      const headR = h * (o.child ? 0.09 : 0.075);
+      const headCY = topY + headR;
+      const shoulderY = topY + headR * 2 + h * 0.025;
+      const hipY = groundY - h * 0.47;
+      const tw = h * (o.child ? 0.27 : 0.24);
+      groundShadow(x, groundY, tw * 1.6);
+      beginObj(reached, h);
+      // cartable de l'élève (derrière le corps)
+      if (o.child) { ctx.beginPath(); ctx.roundRect(x - tw / 2 - h * 0.07, shoulderY + h * 0.03, h * 0.12, h * 0.22, h * 0.03); paint('#F59E0B', reached); }
+      // jambes et chaussures
+      [-1, 1].forEach(s => {
+        ctx.beginPath(); ctx.roundRect(x + s * h * 0.055 - h * 0.042, hipY, h * 0.084, groundY - hipY - h * 0.025, h * 0.03); paint(o.trousers, reached);
+        ctx.beginPath(); ctx.ellipse(x + s * h * 0.07, groundY - h * 0.02, h * 0.06, h * 0.022, 0, 0, Math.PI * 2); paint('#1F2937', reached);
+      });
+      // bras et mains
+      [-1, 1].forEach(s => {
+        const ax = x + s * (tw / 2 + h * 0.03);
+        ctx.beginPath(); ctx.roundRect(ax - h * 0.03, shoulderY + h * 0.01, h * 0.06, h * 0.3, h * 0.03); paint(o.shirt, reached);
+        ctx.beginPath(); ctx.arc(ax, shoulderY + h * 0.32, h * 0.032, 0, Math.PI * 2); paint('#F2C49B', reached);
+      });
+      // torse
+      ctx.beginPath(); ctx.roundRect(x - tw / 2, shoulderY, tw, hipY - shoulderY + h * 0.03, [h * 0.07, h * 0.07, h * 0.02, h * 0.02]); paint(o.shirt, reached);
       if (o.tie) { // cravate du professeur
-        ctx.fillStyle = reached ? '#dc2626' : '#64748b';
         ctx.beginPath();
-        ctx.moveTo(x, bodyTop + h * 0.01); ctx.lineTo(x + h * 0.03, bodyTop + h * 0.12); ctx.lineTo(x, bodyTop + h * 0.16); ctx.lineTo(x - h * 0.03, bodyTop + h * 0.12);
-        ctx.closePath(); ctx.fill();
+        ctx.moveTo(x, shoulderY + h * 0.005); ctx.lineTo(x + h * 0.028, shoulderY + h * 0.11); ctx.lineTo(x, shoulderY + h * 0.16); ctx.lineTo(x - h * 0.028, shoulderY + h * 0.11);
+        ctx.closePath(); paint('#DC2626', reached);
       }
-      if (o.book) { // livre sous le bras
-        ctx.fillStyle = reached ? '#b45309' : '#64748b';
-        ctx.fillRect(x + h * 0.17, hipY - h * 0.12, h * 0.1, h * 0.14);
+      if (o.book) { ctx.beginPath(); ctx.roundRect(x + tw / 2 + h * 0.04, hipY - h * 0.15, h * 0.1, h * 0.14, h * 0.01); paint('#2563EB', reached); }
+      // tête, cheveux, visage
+      ctx.beginPath(); ctx.arc(x, headCY, headR, 0, Math.PI * 2); paint('#F2C49B', reached);
+      ctx.beginPath(); ctx.arc(x, headCY - headR * 0.08, headR * 1.03, Math.PI * 1.02, Math.PI * 1.98); ctx.closePath(); paint(o.hair, reached);
+      if (reached && headR > 5) {
+        ctx.setLineDash([]);
+        ctx.fillStyle = INK;
+        [-1, 1].forEach(s => { ctx.beginPath(); ctx.arc(x + s * headR * 0.36, headCY + headR * 0.18, Math.max(1, headR * 0.1), 0, Math.PI * 2); ctx.fill(); });
+        ctx.lineWidth = Math.max(1, headR * 0.09);
+        ctx.beginPath(); ctx.arc(x, headCY + headR * 0.35, headR * 0.3, Math.PI * 0.2, Math.PI * 0.8); ctx.stroke();
+        if (o.glasses) [-1, 1].forEach(s => { ctx.beginPath(); ctx.arc(x + s * headR * 0.36, headCY + headR * 0.18, headR * 0.24, 0, Math.PI * 2); ctx.stroke(); });
       }
       ctx.restore();
       drawObjectLabel(x, topY - 4, o.label, reached);
@@ -2021,17 +2070,32 @@
 
     function drawTree(x, groundY, topY, reached) {
       const h = Math.max(6, groundY - topY);
-      const crownR = h * 0.3;
-      ctx.save();
-      ctx.globalAlpha = reached ? 0.97 : 0.55;
-      ctx.fillStyle = reached ? '#7c4a1e' : '#475569';
-      const crownBottom = topY + crownR * 1.5;
-      ctx.fillRect(x - h * 0.05, crownBottom - h * 0.05, h * 0.1, groundY - crownBottom + h * 0.05);
-      ctx.fillStyle = reached ? '#15803d' : '#64748b';
-      ctx.beginPath(); ctx.arc(x, topY + crownR, crownR, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = reached ? '#16a34a' : '#6b7a8f';
-      ctx.beginPath(); ctx.arc(x - crownR * 0.55, topY + crownR * 1.25, crownR * 0.7, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(x + crownR * 0.55, topY + crownR * 1.25, crownR * 0.7, 0, Math.PI * 2); ctx.fill();
+      const r = h * 0.26;
+      groundShadow(x, groundY, r * 2.4);
+      beginObj(reached, h);
+      // tronc évasé avec deux branches
+      ctx.beginPath();
+      ctx.moveTo(x - h * 0.06, groundY); ctx.lineTo(x - h * 0.035, topY + r * 1.6);
+      ctx.lineTo(x + h * 0.035, topY + r * 1.6); ctx.lineTo(x + h * 0.06, groundY); ctx.closePath();
+      paint('#8B5A2B', reached);
+      // feuillage : grappes de cercles, de l'arrière vers l'avant
+      const blobs = [[-0.62, 1.35, 0.62], [0.62, 1.35, 0.62], [-0.38, 0.72, 0.66], [0.4, 0.7, 0.64], [0, 1.0, 0.95], [0, 0.42, 0.62]];
+      // contour commun : on trace d'abord tous les contours, puis tous les remplissages par-dessus
+      const blob = ([dx, dy, k]) => { ctx.beginPath(); ctx.arc(x + dx * r, topY + dy * r, k * r, 0, Math.PI * 2); };
+      if (reached) {
+        const lw = ctx.lineWidth;
+        ctx.lineWidth = lw * 2;
+        blobs.forEach(b => { blob(b); ctx.stroke(); });
+        ctx.lineWidth = lw;
+      }
+      ctx.fillStyle = reached ? '#2F9E58' : GHOST;
+      blobs.forEach(b => { blob(b); ctx.fill(); });
+      if (reached) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+        ctx.beginPath(); ctx.arc(x - r * 0.25, topY + r * 0.6, r * 0.28, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#DC2626'; // quelques pommes
+        [[0.35, 1.1], [-0.45, 1.3], [0.05, 0.75]].forEach(([dx, dy]) => { ctx.beginPath(); ctx.arc(x + dx * r, topY + dy * r, Math.max(1.5, r * 0.07), 0, Math.PI * 2); ctx.fill(); });
+      }
       ctx.restore();
       drawObjectLabel(x, topY - 4, 'Arbre · 8 m', reached);
     }
@@ -2039,32 +2103,28 @@
     function drawSchool(x, groundY, topY, reached) {
       const h = Math.max(6, groundY - topY);
       const w = Math.min(canvasWidth * 0.36, h * 2.2);
-      const wallTop = groundY - h * 0.7;
-      ctx.save();
-      ctx.globalAlpha = reached ? 0.96 : 0.55;
-      ctx.fillStyle = reached ? '#fcd9a8' : '#64748b';
-      ctx.fillRect(x - w / 2, wallTop, w, groundY - wallTop);
-      ctx.fillStyle = reached ? '#b91c1c' : '#475569';
-      ctx.beginPath();
-      ctx.moveTo(x - w / 2 - 4, wallTop); ctx.lineTo(x, topY + h * 0.2); ctx.lineTo(x + w / 2 + 4, wallTop);
-      ctx.closePath(); ctx.fill();
-      // fenêtres, porte
-      ctx.fillStyle = reached ? '#bae6fd' : '#94a3b8';
+      const wallTop = groundY - h * 0.62;
+      const roofTop = topY + h * 0.14;
+      groundShadow(x, groundY, w * 1.1);
+      beginObj(reached, h);
+      // mât et drapeau
+      ctx.save(); if (!reached) ctx.strokeStyle = GHOST;
+      ctx.beginPath(); ctx.moveTo(x, roofTop + h * 0.05); ctx.lineTo(x, topY); ctx.stroke(); ctx.restore();
+      ctx.beginPath(); ctx.moveTo(x, topY); ctx.lineTo(x + h * 0.13, topY + h * 0.035); ctx.lineTo(x, topY + h * 0.07); ctx.closePath(); paint('#2563EB', reached);
+      // murs et toit
+      ctx.beginPath(); ctx.rect(x - w / 2, wallTop, w, groundY - wallTop); paint('#F6D7A7', reached);
+      ctx.beginPath(); ctx.moveTo(x - w / 2 - 6, wallTop); ctx.lineTo(x, roofTop); ctx.lineTo(x + w / 2 + 6, wallTop); ctx.closePath(); paint('#C2410C', reached);
+      // horloge au pignon
+      ctx.beginPath(); ctx.arc(x, wallTop - h * 0.1, h * 0.055, 0, Math.PI * 2); paint('#FFFFFF', reached);
+      // fenêtres sur deux niveaux, porte au centre
       const cols = 5;
       for (let c = 0; c < cols; c++) {
-        if (c === 2) continue;
-        const wx = x - w / 2 + w * (c + 0.25) / cols;
-        ctx.fillRect(wx, wallTop + h * 0.1, w / cols * 0.5, h * 0.17);
-        ctx.fillRect(wx, wallTop + h * 0.38, w / cols * 0.5, h * 0.12);
+        const wx = x - w / 2 + w * (c + 0.22) / cols;
+        const ww = w / cols * 0.56;
+        ctx.beginPath(); ctx.rect(wx, wallTop + h * 0.08, ww, h * 0.15); paint('#BFE3FA', reached);
+        if (c !== 2) { ctx.beginPath(); ctx.rect(wx, wallTop + h * 0.34, ww, h * 0.15); paint('#BFE3FA', reached); }
       }
-      ctx.fillStyle = reached ? '#78350f' : '#475569';
-      ctx.fillRect(x - w * 0.06, groundY - h * 0.22, w * 0.12, h * 0.22);
-      // mât et drapeau
-      ctx.strokeStyle = '#e2e8f0';
-      ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(x, topY + h * 0.2); ctx.lineTo(x, topY); ctx.stroke();
-      ctx.fillStyle = reached ? '#2563eb' : '#94a3b8';
-      ctx.fillRect(x, topY, h * 0.12, h * 0.07);
+      ctx.beginPath(); ctx.roundRect(x - w * 0.07, groundY - h * 0.25, w * 0.14, h * 0.25, [w * 0.07, w * 0.07, 0, 0]); paint('#7C4A1E', reached);
       ctx.restore();
       drawObjectLabel(x, topY - 4, 'École · 12 m', reached);
     }
@@ -2072,35 +2132,28 @@
     function drawWaterTower(x, groundY, topY, reached) {
       const h = Math.max(6, groundY - topY);
       const tankW = Math.min(canvasWidth * 0.3, h * 0.4);
-      const tankH = h * 0.32;
-      const tankTop = topY + h * 0.08;
-      ctx.save();
-      ctx.globalAlpha = reached ? 0.97 : 0.55;
-      // pieds et croisillons
-      ctx.strokeStyle = reached ? '#94a3b8' : '#64748b';
-      ctx.lineWidth = Math.max(2, h * 0.025);
+      const tankH = h * 0.3;
+      const tankTop = topY + h * 0.1;
       const legTop = tankTop + tankH;
+      groundShadow(x, groundY, tankW * 1.4);
+      beginObj(reached, h);
+      // pieds et croisillons
+      ctx.strokeStyle = reached ? '#475569' : GHOST;
+      ctx.lineWidth = Math.max(2, h * 0.02);
       ctx.beginPath();
-      ctx.moveTo(x - tankW * 0.45, legTop); ctx.lineTo(x - tankW * 0.62, groundY);
-      ctx.moveTo(x + tankW * 0.45, legTop); ctx.lineTo(x + tankW * 0.62, groundY);
-      ctx.moveTo(x - tankW * 0.15, legTop); ctx.lineTo(x - tankW * 0.2, groundY);
-      ctx.moveTo(x + tankW * 0.15, legTop); ctx.lineTo(x + tankW * 0.2, groundY);
-      ctx.stroke();
-      ctx.lineWidth = Math.max(1, h * 0.012);
+      [[-0.42, -0.6], [0.42, 0.6], [-0.14, -0.2], [0.14, 0.2]].forEach(([a, b]) => { ctx.moveTo(x + tankW * a, legTop); ctx.lineTo(x + tankW * b, groundY); });
       for (let i = 1; i <= 3; i++) {
         const yy = legTop + (groundY - legTop) * i / 4;
-        const hw = tankW * (0.45 + 0.17 * i / 4);
-        ctx.beginPath(); ctx.moveTo(x - hw, yy); ctx.lineTo(x + hw, yy); ctx.stroke();
+        const hw = tankW * (0.42 + 0.18 * i / 4);
+        ctx.moveTo(x - hw, yy); ctx.lineTo(x + hw, yy);
       }
-      // cuve et toit conique
-      ctx.fillStyle = reached ? '#cbd5e1' : '#64748b';
-      ctx.beginPath(); ctx.roundRect(x - tankW / 2, tankTop, tankW, tankH, tankW * 0.12); ctx.fill();
-      ctx.fillStyle = reached ? '#38bdf8' : '#7b8aa0';
-      ctx.fillRect(x - tankW / 2, tankTop + tankH * 0.45, tankW, tankH * 0.12);
-      ctx.fillStyle = reached ? '#64748b' : '#475569';
-      ctx.beginPath();
-      ctx.moveTo(x - tankW * 0.56, tankTop); ctx.lineTo(x, topY); ctx.lineTo(x + tankW * 0.56, tankTop);
-      ctx.closePath(); ctx.fill();
+      ctx.stroke();
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = Math.max(1.2, Math.min(2.6, h * 0.012));
+      // cuve, bande bleue, toit conique
+      ctx.beginPath(); ctx.roundRect(x - tankW / 2, tankTop, tankW, tankH, tankW * 0.12); paint('#E2E8F0', reached);
+      ctx.beginPath(); ctx.rect(x - tankW / 2, tankTop + tankH * 0.42, tankW, tankH * 0.16); paint('#38BDF8', reached);
+      ctx.beginPath(); ctx.moveTo(x - tankW * 0.58, tankTop); ctx.lineTo(x, topY); ctx.lineTo(x + tankW * 0.58, tankTop); ctx.closePath(); paint('#64748B', reached);
       ctx.restore();
       drawObjectLabel(x, topY - 4, "Château d'eau · 40 m", reached);
     }
@@ -2115,8 +2168,8 @@
       const X = h => (h === current.height ? leftX : rightX);
       const Y = h => heightToCanvasY(h);
       const items = [
-        [1.4, () => drawPerson(X(1.4), groundY, Y(1.4), reached(1.4), { shirt: '#3b82f6', trousers: '#1e3a8a', hair: '#78350f', label: 'Élève de CM1 · 1,40 m' })],
-        [1.75, () => drawPerson(X(1.75), groundY, Y(1.75), reached(1.75), { shirt: '#f1f5f9', trousers: '#334155', hair: '#374151', tie: true, book: true, label: 'Professeur · 1,75 m' })],
+        [1.4, () => drawPerson(X(1.4), groundY, Y(1.4), reached(1.4), { child: true, shirt: '#3B82F6', trousers: '#1E3A8A', hair: '#78350F', label: 'Élève de CM1 · 1,40 m' })],
+        [1.75, () => drawPerson(X(1.75), groundY, Y(1.75), reached(1.75), { shirt: '#F8FAFC', trousers: '#334155', hair: '#4B5563', tie: true, book: true, glasses: true, label: 'Professeur · 1,75 m' })],
         [8, () => drawTree(X(8), groundY, Y(8), reached(8))],
         [12, () => drawSchool(X(12), groundY, Y(12), reached(12))],
         [40, () => drawWaterTower(X(40), groundY, Y(40), reached(40))]
@@ -2136,23 +2189,24 @@
       const reached = h => appState.totalHeightMeters >= h;
       const X = h => (h === current.height ? leftX : rightX);
 
+      const D = (h, fn) => { if (!visible(h)) return; if (reached(h)) fn(); else asGhost(fn); };
       if (visible(10)) drawCollege(X(10), groundY, heightToCanvasY(10), reached(10));
-      if (visible(56)) drawPisa(X(56), groundY, heightToCanvasY(56), reached(56));
-      if (visible(93)) drawStatueOfLiberty(X(93), groundY, heightToCanvasY(93), reached(93));
-      if (visible(139)) drawPyramid(X(139), groundY, heightToCanvasY(139), reached(139));
-      if (visible(210)) drawMontparnasse(X(210), groundY, heightToCanvasY(210), reached(210));
-      if (visible(330)) drawEiffelTower(X(330), groundY, heightToCanvasY(330), reached(330));
-      if (visible(443)) drawEmpireState(X(443), groundY, heightToCanvasY(443), reached(443));
-      if (visible(828)) drawBurj(X(828), groundY, heightToCanvasY(828), reached(828));
-      if (visible(1912)) drawMountain(X(1912), groundY, heightToCanvasY(1912), 'Mont Ventoux · 1 912 m', reached(1912));
-      if (visible(4809)) drawMountain(X(4809), groundY, heightToCanvasY(4809), 'Mont Blanc · 4 809 m', reached(4809));
-      if (visible(5895)) drawMountain(X(5895), groundY, heightToCanvasY(5895), 'Kilimandjaro · 5 895 m', reached(5895));
+      D(56, () => drawPisa(X(56), groundY, heightToCanvasY(56), reached(56)));
+      D(93, () => drawStatueOfLiberty(X(93), groundY, heightToCanvasY(93), reached(93)));
+      D(139, () => drawPyramid(X(139), groundY, heightToCanvasY(139), reached(139)));
+      D(210, () => drawMontparnasse(X(210), groundY, heightToCanvasY(210), reached(210)));
+      D(330, () => drawEiffelTower(X(330), groundY, heightToCanvasY(330), reached(330)));
+      D(443, () => drawEmpireState(X(443), groundY, heightToCanvasY(443), reached(443)));
+      D(828, () => drawBurj(X(828), groundY, heightToCanvasY(828), reached(828)));
+      D(1912, () => drawMountain(X(1912), groundY, heightToCanvasY(1912), 'Mont Ventoux · 1 912 m', reached(1912)));
+      D(4809, () => drawMountain(X(4809), groundY, heightToCanvasY(4809), 'Mont Blanc · 4 809 m', reached(4809)));
+      D(5895, () => drawMountain(X(5895), groundY, heightToCanvasY(5895), 'Kilimandjaro · 5 895 m', reached(5895)));
       if (visible(8849)) {
         const topY = heightToCanvasY(8849);
-        drawMountain(X(8849), groundY, topY, 'Everest · 8 849 m', reached(8849));
+        D(8849, () => drawMountain(X(8849), groundY, topY, 'Everest · 8 849 m', reached(8849)));
         // drapeau au sommet
         ctx.save();
-        ctx.strokeStyle = '#f8fafc';
+        ctx.strokeStyle = INK;
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(X(8849), topY);
@@ -2177,7 +2231,7 @@
         const y = heightToCanvasY(m.height);
         const reached = appState.totalHeightMeters >= m.height;
         ctx.save();
-        ctx.strokeStyle = reached ? 'rgba(250, 204, 21, 0.6)' : 'rgba(255, 255, 255, 0.4)';
+        ctx.strokeStyle = reached ? 'rgba(232, 137, 12, 0.7)' : 'rgba(14, 26, 43, 0.35)';
         ctx.setLineDash([3, 4]);
         ctx.lineWidth = 1;
         ctx.beginPath();
@@ -2196,7 +2250,7 @@
     // Règle d'échelle linéaire sur le bord droit, graduations "rondes" (1-2-5 × 10^n).
     function drawScaleRuler(groundY) {
       ctx.save();
-      ctx.font = '9px sans-serif';
+      ctx.font = '10px "DM Sans", sans-serif';
       ctx.textAlign = 'right';
       const x = canvasWidth - 8;
       const rough = cameraMaxAltitude / 5;
@@ -2204,16 +2258,16 @@
       const step = [1, 2, 5, 10].map(k => k * pow).find(v => v >= rough);
       for (let m = step; m <= cameraMaxAltitude; m += step) {
         const y = heightToCanvasY(m);
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.strokeStyle = 'rgba(14, 26, 43, 0.5)';
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(x - 6, y);
         ctx.lineTo(x, y);
         ctx.stroke();
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+        ctx.fillStyle = '#5B6B80';
         ctx.fillText(formatAltitude(m), x - 9, y + 3);
       }
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+      ctx.fillStyle = INK;
       ctx.fillText('échelle linéaire · zoom adaptatif', x, groundY + 52);
       ctx.restore();
     }
@@ -2228,11 +2282,11 @@
         : `🎯 ${goal.label} · encore ${formatNumberFr(remainingBurgers)} 🍔`;
 
       ctx.save();
-      ctx.font = 'bold 11px sans-serif';
+      ctx.font = '700 11px "DM Sans", sans-serif';
       const tw = ctx.measureText(text).width;
       const inView = goal.height <= cameraMaxAltitude * 1.02;
       const y = inView ? heightToCanvasY(goal.height) : 24;
-      const color = reached ? '#4ade80' : '#facc15';
+      const color = reached ? '#0F7B55' : '#B45F00';
 
       if (inView) {
         ctx.strokeStyle = color;
@@ -2251,7 +2305,7 @@
       // À gauche quand la ligne est visible (le palier suivant est étiqueté à droite), à droite pour la flèche du haut
       const boxX = inView ? 14 : Math.max(8, canvasWidth - 70 - boxW);
       const boxY = inView ? Math.max(4, y - 22) : y - 11;
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+      ctx.fillStyle = '#FFFFFF';
       ctx.strokeStyle = color;
       ctx.lineWidth = 1.5;
       ctx.beginPath();
@@ -2317,9 +2371,8 @@
 
       // Ciel terrestre : bleu profond en haut, clair près de l'horizon
       const skyGrad = ctx.createLinearGradient(0, 0, 0, canvasHeight);
-      skyGrad.addColorStop(0, '#0b2a52');
-      skyGrad.addColorStop(0.55, '#1e6fa8');
-      skyGrad.addColorStop(1, '#9bd8f5');
+      skyGrad.addColorStop(0, '#B7D3F5');
+      skyGrad.addColorStop(1, '#EEF5FD');
       ctx.fillStyle = skyGrad;
       ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
@@ -2365,11 +2418,11 @@
         ctx.closePath();
         ctx.fill();
 
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
-        ctx.strokeStyle = '#f59e0b';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.strokeStyle = '#E8890C';
         ctx.lineWidth = 1.5;
         const tagText = `${formatNumberFr(totalBurgers)} 🍔 (${formatNumberFr(appState.totalHeightMeters, 1)} m)`;
-        ctx.font = 'bold 11px sans-serif';
+        ctx.font = '700 11px "DM Sans", sans-serif';
         const tw = ctx.measureText(tagText).width;
 
         ctx.beginPath();
@@ -2379,7 +2432,7 @@
         ctx.fill();
         ctx.stroke();
 
-        ctx.fillStyle = '#fef08a';
+        ctx.fillStyle = INK;
         ctx.fillText(tagText, tagX + 8, targetY + 17);
       } else {
         drawVectorBigMac(centerX, groundY - 8, 1.0, false);
