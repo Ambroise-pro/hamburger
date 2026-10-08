@@ -157,21 +157,6 @@
       </section>
 
       <!-- Bandeau de l'établissement connecté -->
-      <section id="teacherBar" class="hidden bg-slate-900/90 rounded-2xl p-4 border border-emerald-500/30 shadow-xl">
-        <div class="flex items-start justify-between gap-2">
-          <div class="min-w-0">
-            <div class="text-[10px] uppercase text-emerald-300 font-semibold tracking-wider">Mon établissement</div>
-            <div id="teacherName" class="font-bold text-white truncate"></div>
-            <div class="text-[11px] text-slate-400">Connecté : <span id="teacherLogin" class="text-slate-200 break-all"></span></div>
-          </div>
-          <button id="btnLogout" type="button" class="shrink-0 text-xs text-slate-300 hover:text-white py-1.5 px-2.5 rounded-lg bg-slate-800 border border-slate-700 cursor-pointer">Se déconnecter</button>
-        </div>
-        <div class="grid grid-cols-3 gap-2 mt-3 text-center">
-          <div class="p-2 rounded-lg bg-slate-800/60"><div id="myStatSessions" class="text-sm font-black text-white">0</div><div class="text-[10px] text-slate-400">séances</div></div>
-          <div class="p-2 rounded-lg bg-slate-800/60"><div id="myStatBurgers" class="text-sm font-black text-amber-400">0</div><div class="text-[10px] text-slate-400">Big Macs</div></div>
-          <div class="p-2 rounded-lg bg-slate-800/60"><div id="myStatShare" class="text-sm font-black text-cyan-400">0 %</div><div class="text-[10px] text-slate-400">du cumul</div></div>
-        </div>
-      </section>
       
       <!-- Carte : Nouvelle Séance EPS -->
       <!-- Adresse e-mail à confirmer -->
@@ -371,6 +356,22 @@
           <div id="statGoalSub" class="text-[10px] text-slate-500">Objectif final : 8 849 m</div>
         </div>
       </div>
+
+      <section id="teacherBar" class="hidden bg-slate-900/90 rounded-2xl p-4 border border-emerald-500/30 shadow-xl">
+        <div class="flex items-start justify-between gap-2">
+          <div class="min-w-0">
+            <div class="text-[10px] uppercase text-emerald-300 font-semibold tracking-wider">Mon établissement</div>
+            <div id="teacherName" class="font-bold text-white truncate"></div>
+            <div class="text-[11px] text-slate-400">Connecté : <span id="teacherLogin" class="text-slate-200 break-all"></span></div>
+          </div>
+          <button id="btnLogout" type="button" class="shrink-0 text-xs text-slate-300 hover:text-white py-1.5 px-2.5 rounded-lg bg-slate-800 border border-slate-700 cursor-pointer">Se déconnecter</button>
+        </div>
+        <div class="grid grid-cols-3 gap-2 mt-3 text-center">
+          <div class="p-2 rounded-lg bg-slate-800/60"><div id="myStatSessions" class="text-sm font-black text-white">0</div><div class="text-[10px] text-slate-400">séances</div></div>
+          <div class="p-2 rounded-lg bg-slate-800/60"><div id="myStatBurgers" class="text-sm font-black text-amber-400">0</div><div class="text-[10px] text-slate-400">Big Macs</div></div>
+          <div class="p-2 rounded-lg bg-slate-800/60"><div id="myStatShare" class="text-sm font-black text-cyan-400">0 %</div><div class="text-[10px] text-slate-400">du cumul</div></div>
+        </div>
+      </section>
 
       <div class="relative bg-slate-950 rounded-2xl border border-slate-800 shadow-2xl overflow-hidden flex-1 min-h-[480px] sm:min-h-[580px] flex flex-col">
         <canvas id="spaceCanvas" class="w-full h-full absolute inset-0"></canvas>
@@ -1374,6 +1375,7 @@
       const left = document.getElementById('leftCol');
       const right = document.getElementById('rightCol');
       left.classList.toggle('hidden', !space);
+      teacherBar.classList.toggle('hidden', !appState.user || !space);
       right.classList.toggle('hidden', space && !verified);
       left.classList.toggle('lg:col-span-5', space && verified);
       left.classList.toggle('lg:col-span-6', !(space && verified));
@@ -1401,7 +1403,7 @@
     function renderAuthState() {
       const user = appState.user;
       authCard.classList.toggle('hidden', !!user);
-      teacherBar.classList.toggle('hidden', !user);
+      teacherBar.classList.toggle('hidden', !user || page !== 'space');
       const verified = !!(user && user.emailVerified);
       document.getElementById('verifyCard').classList.toggle('hidden', !(user && !verified));
       document.getElementById('btnOpenSession').classList.toggle('hidden', !verified);
