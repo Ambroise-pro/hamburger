@@ -99,6 +99,29 @@
     .tab-off:hover { background: #E3E9F1; }
     #statTotalKcal, #statTotalBurgers, #statTotalHeight, #statPercentGoal { font-size: 1.9rem !important; line-height: 1.1; }
     #toast { background: #FFFFFF !important; }
+
+    /* Objectifs : un carnet d'expédition, du premier pas au sommet. */
+    #roadmapList { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; max-height: none; overflow: visible; padding: 0; }
+    #roadmapList > * { margin: 0; }
+    .goal-card { --goal-color: #536781; --goal-tint: #edf2f8; position: relative; padding: 16px; border: 1px solid #dce4ee; border-radius: 20px; background: #fff; color: #15263c; overflow: hidden; }
+    .goal-card.is-next { --goal-color: #995000; --goal-tint: #fff0cf; border: 2px solid #e9b34c; padding: 15px; background: linear-gradient(145deg, #fff8e9, #fff 70%); box-shadow: 0 4px 16px #b9771010; }
+    .goal-card.is-reached { --goal-color: #137451; --goal-tint: #e1f5e9; border-color: #b6ddc6; }
+    .goal-card.is-final { grid-column: 1 / -1; }
+    .goal-topline, .goal-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .goal-step { color: #66758a; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    .goal-status { padding: 4px 8px; border-radius: 20px; background: var(--goal-tint); color: var(--goal-color); font-size: 10px; font-weight: 700; }
+    .goal-portrait { display: flex; align-items: center; gap: 12px; margin: 16px 0 12px; }
+    .goal-icon { flex: 0 0 56px; height: 56px; display: grid; place-items: center; border-radius: 18px; background: var(--goal-tint); font-size: 30px; box-shadow: inset 0 -3px 0 #10243a08; }
+    .goal-name { margin: 0; font-size: 14px; line-height: 1.35; font-weight: 800; overflow-wrap: anywhere; }
+    .goal-height { margin-top: 3px; color: var(--goal-color); font-size: 12px; font-weight: 700; }
+    .goal-description { margin: 0 0 14px; color: #53647a; font-size: 11px; line-height: 1.6; }
+    .goal-track { height: 7px; overflow: hidden; border-radius: 8px; background: #e8edf3; }
+    .goal-fill { height: 100%; border-radius: inherit; background: #e8ab35; transition: width .4s ease; }
+    .is-reached .goal-fill { background: #33a477; }
+    .goal-meta { margin-top: 8px; color: #53647a; font-size: 11px; line-height: 1.4; }
+    .goal-percent { font-weight: 800; color: var(--goal-color); white-space: nowrap; }
+    @media (max-width: 520px) { #roadmapList { grid-template-columns: minmax(0, 1fr); } .goal-portrait { margin-top: 12px; } }
+    @media (prefers-reduced-motion: reduce) { .goal-fill { transition: none; } }
   </style>
 </head>
 <body class="min-h-full flex flex-col font-sans antialiased text-slate-200 bg-gradient-to-b from-slate-950 via-slate-900 to-indigo-950 selection:bg-amber-500 selection:text-black">
@@ -1161,37 +1184,40 @@
         return n;
       };
 
-      activeMilestones().filter(m => m.height > 0).forEach(m => {
-        const burgersNeeded = Math.ceil(m.height / HEIGHT_PER_BIGMAC_METERS);
-        const kcalNeeded = burgersNeeded * CALORIES_PER_BIGMAC;
-        const pct = Math.min(100, (appState.totalHeightMeters / m.height) * 100);
+      const milestones = activeMilestones().filter(m => m.height > 0);
+      const nextIndex = milestones.findIndex(m => appState.totalHeightMeters < m.height);
+      milestones.forEach((m, index) => {
+        const pct = Math.max(0, Math.min(100, (appState.totalHeightMeters / m.height) * 100));
         const reached = appState.totalHeightMeters >= m.height;
-        const isGoal = Math.abs(goal.height - m.height) < 1;
-        const burgersLeft = reached ? 0 : Math.ceil(Math.max(0, burgersNeeded - appState.totalBurgers));
-
-        const row = el('div', 'rounded-lg border px-2.5 py-1.5 ' +
-          (isGoal ? 'border-amber-500/60 bg-amber-500/10' : reached ? 'border-emerald-700/40 bg-emerald-900/10' : 'border-slate-800 bg-slate-800/40'));
-
-        const top = el('div', 'flex items-center justify-between gap-2 text-xs');
-        const name = el('div', 'font-semibold truncate ' + (reached ? 'text-emerald-300' : 'text-slate-200'),
-          `${reached ? '✔' : m.icon} ${m.name}`);
-        const right = el('div', 'flex items-center gap-2 shrink-0');
-        right.appendChild(el('span', 'text-[10px] text-slate-400 font-mono', formatAltitude(m.height)));
-        if (isGoal) {
-          right.appendChild(el('span', 'text-[10px] px-1.5 rounded bg-amber-500/30 text-amber-200 font-bold', 'OBJECTIF'));
-        }
-        top.append(name, right);
-
-        const bar = el('div', 'h-1 rounded-full bg-slate-700 overflow-hidden mt-1');
-        const fill = el('div', 'h-full rounded-full ' + (reached ? 'bg-emerald-400' : 'bg-amber-400'));
-        fill.style.width = `${pct.toFixed(2)}%`;
-        bar.appendChild(fill);
-
-        const detail = el('div', 'text-[10px] text-slate-400 mt-1',
-          `${formatCompact(burgersNeeded)} 🍔 · ${formatCompact(kcalNeeded)} kcal · ` +
-          (reached ? 'atteint' : `encore ${formatCompact(burgersLeft)} 🍔`));
-
-        row.append(top, bar, detail);
+        const isNext = index === nextIndex;
+        const isGoal = m.height === goal.height;
+        const burgersLeft = Math.ceil(Math.max(0, (m.height - appState.totalHeightMeters) / HEIGHT_PER_BIGMAC_METERS));
+        const row = el('article', 'goal-card' + (reached ? ' is-reached' : isNext ? ' is-next' : '') + (isGoal ? ' is-final' : ''));
+        const top = el('div', 'goal-topline');
+        top.append(el('span', 'goal-step', isGoal ? '★ Défi final' : `Étape ${String(index + 1).padStart(2, '0')}`),
+          el('span', 'goal-status', reached ? '✓ Atteint !' : isNext ? 'Prochain défi' : 'À explorer'));
+        const portrait = el('div', 'goal-portrait');
+        const icon = el('span', 'goal-icon', m.icon);
+        icon.setAttribute('aria-hidden', 'true');
+        const heading = el('div');
+        heading.append(el('h4', 'goal-name', m.name.replace(/^Plus haut (que |qu')/, '')),
+          el('div', 'goal-height', formatAltitude(m.height)));
+        portrait.append(icon, heading);
+        const bar = el('div', 'goal-track');
+        bar.setAttribute('role', 'progressbar');
+        bar.setAttribute('aria-label', m.name);
+        bar.setAttribute('aria-valuemin', '0');
+        bar.setAttribute('aria-valuemax', '100');
+        bar.setAttribute('aria-valuenow', pct.toFixed(1));
+        const fill = el('div', 'goal-fill');
+        fill.style.width = `${pct}%`;
+        bar.append(fill);
+        const detail = el('div', 'goal-meta');
+        detail.append(el('span', '', reached ? 'Bravo, un cap de plus !' : `Encore ${formatCompact(burgersLeft)} 🍔`),
+          el('span', 'goal-percent', pct > 0 && pct < 1 ? '< 1 %' : `${Math.floor(pct)} %`));
+        row.append(top, portrait);
+        if (reached || isNext) row.append(el('p', 'goal-description', reached ? m.desc : 'Chaque séance vous rapproche de ce nouveau cap.'));
+        row.append(bar, detail);
         list.appendChild(row);
       });
     }
@@ -1258,7 +1284,7 @@
         const nextDistStr = formatAltitude(mInfo.next.height);
         nextMilestoneTarget.textContent = `${mInfo.next.name} (${nextDistStr})`;
       } else {
-        nextMilestoneTarget.textContent = "Everest atteint ! 🏆";
+        nextMilestoneTarget.textContent = `${getGoal().label} atteint ! 🏆`;
       }
 
       renderHistoryList();
