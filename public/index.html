@@ -1,0 +1,2582 @@
+<!DOCTYPE html>
+<html lang="fr" class="h-full bg-slate-950 text-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EPS Mission Everest : Dépense Calorique en Big Macs</title>
+  <!-- Limite connue : Tailwind est chargé via le CDN "Play" (pratique, mais prévu pour le développement).
+       Sans connexion au premier chargement, la mise en forme n'apparaît pas. Pour un usage durable hors ligne,
+       compiler le CSS (npx tailwindcss -o tailwind.css --minify) et le lier ici à la place de ce script. -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- SDK Firebase (compat) : authentification + base Firestore. Actif seulement si FIREBASE_CONFIG est renseigné plus bas. -->
+  <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            burger: {
+              bun: '#D97706',
+              meat: '#78350F',
+              lettuce: '#22C55E',
+              cheese: '#FACC15',
+              sauce: '#F97316'
+            },
+            space: {
+              900: '#0B0F19',
+              800: '#111827',
+              700: '#1F2937'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @keyframes float {
+      0%, 100% { transform: translateY(0px) rotate(0deg); }
+      50% { transform: translateY(-8px) rotate(2deg); }
+    }
+    @keyframes pulse-glow {
+      0%, 100% { opacity: 0.4; transform: scale(1); }
+      50% { opacity: 0.8; transform: scale(1.05); }
+    }
+    .floating-burger {
+      animation: float 4s ease-in-out infinite;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .floating-burger, .animate-ping { animation: none !important; }
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.6);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+  </style>
+</head>
+<body class="min-h-full flex flex-col font-sans antialiased text-slate-200 bg-gradient-to-b from-slate-950 via-slate-900 to-indigo-950 selection:bg-amber-500 selection:text-black">
+
+  <header class="border-b border-slate-800/80 bg-slate-900/80 backdrop-blur-md sticky top-0 z-40 px-4 py-3 sm:px-6 shadow-lg">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-300 flex items-center justify-center text-2xl shadow-lg shadow-amber-500/20">
+          🍔
+        </div>
+        <div>
+          <h1 class="text-lg sm:text-xl font-bold tracking-tight text-white flex items-center gap-2">
+            EPS Mission Everest
+            <span class="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-medium">Big Mac Tracker</span>
+          </h1>
+          <p class="text-xs text-slate-400">Défi collectif des établissements : l'énergie des élèves, empilée en Big Macs jusqu'au sommet</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <div class="bg-slate-800/90 border border-slate-700/80 rounded-lg px-3 py-1.5 flex items-center gap-2 text-xs">
+          <span class="text-slate-400">Cumul collectif :</span>
+          <span id="badgeTotalBurgers" class="font-extrabold text-amber-400 text-sm">0</span>
+          <span class="text-slate-400">🍔</span>
+        </div>
+        
+        <div class="bg-slate-800/90 border border-slate-700/80 rounded-lg px-3 py-1.5 hidden sm:flex items-center gap-2 text-xs">
+          <span>🏫</span>
+          <span id="badgeEtabs" class="font-extrabold text-emerald-300 text-sm">0</span>
+          <span class="text-slate-400">établissement(s)</span>
+        </div>
+
+        <button id="btnGoSpace" type="button" class="px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition cursor-pointer">
+          🏫 <span id="goSpaceLabel">Inscription</span>
+        </button>
+
+        <button id="btnSoundToggle" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition text-xs flex items-center gap-1.5" title="Activer/Désactiver le son">
+          <span id="soundIcon">🔊</span>
+          <span class="hidden sm:inline" id="soundLabel">Audio</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+    <div id="configBanner" class="hidden lg:col-span-12 order-first bg-amber-500/10 border border-amber-500/40 rounded-xl px-4 py-3 text-xs text-amber-200">
+      ⚠️ <strong>Mode démonstration :</strong> les inscriptions et les séances restent sur cet appareil et ne sont pas partagées.
+      Pour le défi réel entre établissements, renseignez la configuration Firebase (voir <code>README-firebase.md</code>).
+    </div>
+
+    <!-- Colonne GAUCHE : Formulaire & Configuration (5 cols) -->
+    <div id="leftCol" class="lg:col-span-5 flex flex-col space-y-6 order-2 lg:order-1">
+
+      <!-- Inscription / connexion (visiteur non connecté) -->
+      <section id="authCard" class="bg-slate-900/90 rounded-2xl p-5 border border-slate-800 shadow-xl">
+        <div class="flex gap-1 mb-4 bg-slate-800/70 rounded-xl p-1 text-xs font-semibold">
+          <button id="tabRegister" type="button" class="flex-1 py-2 rounded-lg bg-amber-500 text-slate-950 cursor-pointer">Inscrire mon établissement</button>
+          <button id="tabLogin" type="button" class="flex-1 py-2 rounded-lg text-slate-300 hover:bg-slate-700 cursor-pointer">Se connecter</button>
+        </div>
+
+        <form id="registerForm" class="space-y-3" autocomplete="on">
+          <p class="text-[11px] text-slate-400">Inscrivez votre établissement avec votre adresse e-mail professionnelle : elle sert à vous connecter et à réinitialiser votre mot de passe. Elle n'est jamais affichée publiquement.</p>
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1" for="regName">Nom de l'établissement</label>
+            <input id="regName" type="text" required minlength="2" maxlength="80" class="w-full bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1" for="regCity">Ville</label>
+              <input id="regCity" type="text" maxlength="60" class="w-full bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1" for="regCountry">Pays</label>
+              <input id="regCountry" type="text" maxlength="60" class="w-full bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1" for="regEmail">Adresse e-mail</label>
+            <input id="regEmail" type="email" required maxlength="120" autocomplete="email" class="w-full bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1" for="regPwd">Mot de passe</label>
+              <input id="regPwd" type="password" required minlength="8" maxlength="100" autocomplete="new-password" class="w-full bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1" for="regPwd2">Confirmation</label>
+              <input id="regPwd2" type="password" required minlength="8" maxlength="100" autocomplete="new-password" class="w-full bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">
+            </div>
+          </div>
+          <p class="text-[10px] text-slate-500 -mt-1">8 caractères minimum.</p>
+          <label class="flex items-start gap-2 text-[11px] text-slate-400">
+            <input id="regConsent" type="checkbox" required class="mt-0.5 accent-amber-500">
+            <span>Je suis enseignant·e et je ne saisirai que des totaux par séance : <strong>aucune donnée nominative d'élève</strong>.</span>
+          </label>
+          <p id="registerError" class="hidden text-xs text-red-400"></p>
+          <button id="btnRegister" type="submit" class="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-extrabold text-sm transition cursor-pointer">Inscrire mon établissement</button>
+        </form>
+
+        <form id="loginForm" class="hidden space-y-3">
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1" for="loginEmail">Adresse e-mail</label>
+            <input id="loginEmail" type="email" required maxlength="120" autocomplete="username" class="w-full bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1" for="loginPwd">Mot de passe</label>
+            <input id="loginPwd" type="password" required maxlength="100" autocomplete="current-password" class="w-full bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">
+          </div>
+          <p id="loginError" class="hidden text-xs text-red-400"></p>
+          <p id="loginInfo" class="hidden text-xs text-emerald-300"></p>
+          <button id="btnLogin" type="submit" class="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-extrabold text-sm transition cursor-pointer">Se connecter</button>
+          <button id="btnForgot" type="button" class="w-full text-xs text-slate-400 hover:text-amber-300 underline cursor-pointer">Mot de passe oublié ?</button>
+        </form>
+      </section>
+
+      <!-- Bandeau de l'établissement connecté -->
+      <section id="teacherBar" class="hidden bg-slate-900/90 rounded-2xl p-4 border border-emerald-500/30 shadow-xl">
+        <div class="flex items-start justify-between gap-2">
+          <div class="min-w-0">
+            <div class="text-[10px] uppercase text-emerald-300 font-semibold tracking-wider">Mon établissement</div>
+            <div id="teacherName" class="font-bold text-white truncate"></div>
+            <div class="text-[11px] text-slate-400">Connecté : <span id="teacherLogin" class="text-slate-200 break-all"></span></div>
+          </div>
+          <button id="btnLogout" type="button" class="shrink-0 text-xs text-slate-300 hover:text-white py-1.5 px-2.5 rounded-lg bg-slate-800 border border-slate-700 cursor-pointer">Se déconnecter</button>
+        </div>
+        <div class="grid grid-cols-3 gap-2 mt-3 text-center">
+          <div class="p-2 rounded-lg bg-slate-800/60"><div id="myStatSessions" class="text-sm font-black text-white">0</div><div class="text-[10px] text-slate-400">séances</div></div>
+          <div class="p-2 rounded-lg bg-slate-800/60"><div id="myStatBurgers" class="text-sm font-black text-amber-400">0</div><div class="text-[10px] text-slate-400">Big Macs</div></div>
+          <div class="p-2 rounded-lg bg-slate-800/60"><div id="myStatShare" class="text-sm font-black text-cyan-400">0 %</div><div class="text-[10px] text-slate-400">du cumul</div></div>
+        </div>
+      </section>
+      
+      <!-- Carte : Nouvelle Séance EPS -->
+      <!-- Adresse e-mail à confirmer -->
+      <section id="verifyCard" class="hidden bg-slate-900/90 rounded-2xl p-5 border border-amber-500/40 shadow-xl">
+        <div class="flex items-start gap-3">
+          <div class="text-2xl">✉️</div>
+          <div class="min-w-0">
+            <h3 class="font-bold text-white text-sm">Confirmez votre adresse e-mail</h3>
+            <p class="text-xs text-slate-300 mt-1">Un lien de confirmation a été envoyé à <strong id="verifyEmail" class="break-all text-amber-300"></strong>. Cliquez dessus, puis revenez ici : la saisie des séances sera débloquée.</p>
+            <p class="text-[11px] text-slate-500 mt-1">Rien reçu ? Vérifiez les courriers indésirables.</p>
+          </div>
+        </div>
+        <p id="verifyMsg" class="hidden text-xs mt-3"></p>
+        <div class="flex flex-wrap gap-2 mt-3">
+          <button id="btnVerifyCheck" type="button" class="flex-1 min-w-[150px] py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition cursor-pointer">J'ai confirmé mon adresse</button>
+          <button id="btnVerifyResend" type="button" class="flex-1 min-w-[150px] py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs transition cursor-pointer">Renvoyer l'e-mail</button>
+        </div>
+      </section>
+
+      <section id="sessionSection" class="hidden bg-slate-900/90 rounded-2xl p-5 border border-slate-800 shadow-xl relative overflow-hidden backdrop-blur-sm">
+        <div class="absolute -right-12 -top-12 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl pointer-events-none"></div>
+        
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-base font-bold text-white flex items-center gap-2">
+            <span class="p-1.5 bg-indigo-500/20 text-indigo-400 rounded-lg text-sm">🏃</span>
+            Nouvelle Séance d'EPS
+          </h2>
+          <span class="text-xs text-slate-400 font-mono" id="todayDate"></span>
+        </div>
+
+        <form id="sessionForm" class="space-y-4">
+          
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5" for="activitySelect">
+              Activité Physique (APSA)
+            </label>
+            <select id="activitySelect" class="w-full bg-slate-800/90 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500 transition">
+            </select>
+            <p id="activityDescription" class="text-xs text-slate-400 mt-1 italic"></p>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5" for="classCount">
+              Nb de classes identiques <span class="normal-case text-slate-500 font-normal">(1 = une classe, &gt;1 = établissement)</span>
+            </label>
+            <input type="number" id="classCount" min="1" max="30" value="1" class="w-full bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-amber-500 focus:outline-none font-semibold">
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5" for="studentCount">
+                Nb d'élèves (par classe)
+              </label>
+              <div class="relative">
+                <input type="number" id="studentCount" min="1" max="60" value="18" class="w-full bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-amber-500 focus:outline-none font-semibold">
+                <span class="absolute right-3 top-2.5 text-xs text-slate-500">actifs</span>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5" for="averageWeight">
+                Poids moyen
+              </label>
+              <div class="relative">
+                <input type="number" id="averageWeight" min="20" max="110" value="20" class="w-full bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-amber-500 focus:outline-none font-semibold">
+                <span class="absolute right-3 top-2.5 text-xs text-slate-500">kg</span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="flex justify-between items-center mb-1.5">
+              <label class="text-xs font-semibold uppercase tracking-wider text-slate-300" for="durationRange">
+                Temps de pratique active (hors vestiaires)
+              </label>
+              <span id="durationBadge" class="text-xs font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">30 min</span>
+            </div>
+            <input type="range" id="durationRange" min="10" max="120" step="5" value="30" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500">
+            <div class="flex justify-between text-[10px] text-slate-500 mt-1">
+              <span>10 min</span>
+              <span>45 min (standard)</span>
+              <span>90 min</span>
+              <span>120 min</span>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
+              Intensité moyenne de l'effort
+            </label>
+            <div class="grid grid-cols-3 gap-2" id="intensityGroup">
+              <button type="button" data-intensity="low" class="intensity-btn py-2 px-2 text-xs font-medium rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-700/80 transition text-center flex flex-col items-center gap-1">
+                <span class="text-sm">🧘</span>
+                <span>Modérée</span>
+                <span class="text-[10px] text-slate-400">Échauff. / Base</span>
+              </button>
+              <button type="button" data-intensity="mid" class="intensity-btn py-2 px-2 text-xs font-medium rounded-xl border-2 border-amber-500 bg-amber-500/15 text-amber-300 transition text-center flex flex-col items-center gap-1 font-bold shadow-lg shadow-amber-500/10">
+                <span class="text-sm">⚡</span>
+                <span>Soutenue</span>
+                <span class="text-[10px] text-amber-200/80">Match / Rythme</span>
+              </button>
+              <button type="button" data-intensity="high" class="intensity-btn py-2 px-2 text-xs font-medium rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-700/80 transition text-center flex flex-col items-center gap-1">
+                <span class="text-sm">🔥</span>
+                <span>Vigoureuse</span>
+                <span class="text-[10px] text-slate-400">Fractionné / VMA</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-yellow-500/10 border border-amber-500/30 rounded-xl p-3.5 flex items-center justify-between">
+            <div>
+              <div class="text-[11px] uppercase tracking-wider text-amber-300/80 font-semibold">Estimation Séance</div>
+              <div class="text-2xl font-black text-white tracking-tight flex items-baseline gap-1.5 mt-0.5">
+                <span id="sessionPreviewCalories">0</span>
+                <span class="text-xs text-amber-400 font-bold uppercase">kcal</span>
+              </div>
+              <div class="text-xs text-slate-400 mt-0.5">
+                soit env. <span id="sessionPerPupilCalories" class="text-slate-200 font-semibold">0</span> kcal / élève
+              </div>
+              <div class="text-[10px] text-slate-500 mt-0.5">Estimation approximative (±25 %), dépense nette d'effort</div>
+            </div>
+            
+            <div class="text-right flex flex-col items-end">
+              <div class="text-[11px] uppercase tracking-wider text-amber-300/80 font-semibold">Équivalent</div>
+              <div class="text-2xl font-black text-amber-400 tracking-tight flex items-baseline gap-1 mt-0.5">
+                <span id="sessionPreviewBurgers">0</span>
+                <span class="text-xl">🍔</span>
+              </div>
+              <div class="text-[11px] text-slate-400 mt-0.5">
+                ~ <span id="sessionPreviewHeight">0</span> m empilés
+              </div>
+            </div>
+          </div>
+
+          <!-- Bouton validation -->
+          <button type="submit" id="btnAddSession" class="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-extrabold text-sm shadow-xl shadow-amber-500/25 active:scale-[0.98] transition flex items-center justify-center gap-2 cursor-pointer">
+            <span>🚀</span>
+            <span>Empiler ces Big Macs !</span>
+          </button>
+        </form>
+      </section>
+
+      <section id="journalSection" class="hidden bg-slate-900/90 rounded-2xl p-5 border border-slate-800 shadow-xl backdrop-blur-sm flex flex-col">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-bold text-white flex items-center gap-2">
+            <span>📋</span>
+            Journal des séances de mon établissement
+          </h3>
+          <span id="historyCountBadge" class="text-[10px] bg-slate-800 border border-slate-700 text-slate-300 px-2 py-0.5 rounded-full font-mono">0 séance</span>
+        </div>
+
+        <div id="historyListContainer" class="flex-1 overflow-y-auto max-h-60 pr-1 space-y-2 text-xs">
+          <div id="emptyHistoryMsg" class="h-32 flex flex-col items-center justify-center text-slate-500 text-center p-4">
+            <span class="text-2xl mb-1 opacity-50">👟</span>
+            <p>Aucune séance enregistrée pour le moment.</p>
+            <p class="text-[11px] text-slate-600">Lancez la première séance pour alimenter la tour !</p>
+          </div>
+        </div>
+
+        <div class="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
+          <button id="btnExportData" class="text-slate-400 hover:text-slate-200 py-1.5 px-2.5 rounded-lg bg-slate-800/70 border border-slate-700/60 transition flex items-center gap-1.5 cursor-pointer">
+            <span>💾</span> Exporter mes séances
+          </button>
+          <span class="text-[10px] text-slate-500">Les données sont enregistrées en ligne</span>
+        </div>
+      </section>
+    </div>
+
+    <div class="lg:col-span-7 flex flex-col space-y-4 order-1 lg:order-2">
+      
+      <!-- Choix de l'écran : cumul collectif ou établissement -->
+      <div id="viewTabs" class="flex gap-1 bg-slate-900/90 border border-slate-800 rounded-xl p-1 text-xs font-semibold">
+        <button id="tabViewCollective" type="button" class="flex-1 py-2 rounded-lg cursor-pointer">🌍 Cumul collectif</button>
+        <button id="tabViewClass" type="button" class="flex-1 py-2 rounded-lg cursor-pointer">🏫 Mon établissement</button>
+      </div>
+
+      <div class="bg-slate-900/90 rounded-2xl p-4 border border-slate-800 shadow-xl backdrop-blur-sm grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+        <div class="p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/50">
+          <div class="text-[10px] text-slate-400 uppercase font-semibold">Calories Cumulées</div>
+          <div id="statTotalKcal" class="text-base sm:text-lg font-black text-amber-400 mt-0.5 truncate">0</div>
+          <div id="statKcalSub" class="text-[10px] text-slate-500">kcal collectif</div>
+        </div>
+
+        <div class="p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/50">
+          <div class="text-[10px] text-slate-400 uppercase font-semibold">Big Macs Totaux</div>
+          <div id="statTotalBurgers" class="text-base sm:text-lg font-black text-yellow-300 mt-0.5 truncate">0</div>
+          <div class="text-[10px] text-slate-500">burgers de 7 cm</div>
+        </div>
+
+        <div class="p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/50">
+          <div class="text-[10px] text-slate-400 uppercase font-semibold">Altitude de la Tour</div>
+          <div id="statTotalHeight" class="text-base sm:text-lg font-black text-emerald-400 mt-0.5 truncate">0 m</div>
+          <div class="text-[10px] text-slate-500" id="statHeightSub">0.000 km</div>
+        </div>
+
+        <div class="p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/50">
+          <div id="statGoalTitle" class="text-[10px] text-slate-400 uppercase font-semibold">Cap vers l'Everest</div>
+          <div id="statPercentGoal" class="text-base sm:text-lg font-black text-cyan-400 mt-0.5 truncate">0 %</div>
+          <div id="statGoalSub" class="text-[10px] text-slate-500">Objectif final : 8 849 m</div>
+        </div>
+      </div>
+
+      <!-- Palier courant : bandeau placé AU-DESSUS de la simulation (ne la recouvre plus) -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 shadow-xl flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="text-2xl" id="currentMilestoneIcon">🏫</span>
+          <div class="min-w-0">
+            <div class="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Palier atteint</div>
+            <div class="text-xs font-extrabold text-white truncate" id="currentMilestoneName">Cour de récréation</div>
+          </div>
+        </div>
+        <p class="text-[11px] text-slate-300 flex-1 min-w-[160px]" id="currentMilestoneDesc">
+          Les Big Macs s'empilent sur le sol de l'établissement !
+        </p>
+        <div class="w-full sm:w-64">
+          <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+            <div id="milestoneProgressBar" class="h-full bg-gradient-to-r from-amber-500 to-yellow-400 rounded-full transition-all duration-500" style="width: 0%"></div>
+          </div>
+          <div class="flex justify-between gap-2 text-[9px] text-slate-400 mt-1 font-mono">
+            <span>Prochain palier</span>
+            <span id="nextMilestoneTarget" class="truncate">Toit du Collège (10 m)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="relative bg-slate-950 rounded-2xl border border-slate-800 shadow-2xl overflow-hidden flex-1 min-h-[480px] sm:min-h-[580px] flex flex-col">
+        <canvas id="spaceCanvas" class="w-full h-full absolute inset-0"></canvas>
+      </div>
+
+      <!-- MODE TEST : raccourcis de simulation -->
+      <section class="bg-slate-900/90 rounded-2xl border border-slate-800 p-4 shadow-xl">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <h3 class="text-sm font-bold text-white flex items-center gap-2"><span>🗺️</span> <span id="roadmapTitle">Feuille de route : cumul collectif</span></h3>
+          <span id="roadmapSub" class="text-[10px] text-slate-500">Big Macs restants pour chaque palier (cumul collectif)</span>
+        </div>
+        <div id="roadmapList" class="space-y-1.5 max-h-72 overflow-y-auto pr-1"></div>
+      </section>
+
+      <section id="leaderboardSection" class="bg-slate-900/90 rounded-2xl border border-slate-800 p-4 shadow-xl">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <h3 class="text-sm font-bold text-white flex items-center gap-2"><span>🏆</span> Classement des établissements</h3>
+          <span id="etabCountBadge" class="text-[10px] bg-slate-800 border border-slate-700 text-slate-300 px-2 py-0.5 rounded-full font-mono">0 établissement</span>
+        </div>
+        <div id="leaderboardList" class="space-y-1.5 max-h-72 overflow-y-auto pr-1 text-xs"></div>
+      </section>
+
+      <div id="testSessionsBanner"class="hidden bg-fuchsia-500/10 border border-fuchsia-500/40 rounded-xl px-3 py-2 text-xs text-fuchsia-200 flex flex-wrap items-center justify-between gap-2">
+        <span>🧪 <strong id="testSessionsCount">0</strong> séance(s) de simulation comptent dans les totaux affichés (non enregistrées, visibles seulement ici).</span>
+        <button id="btnDeleteTestSessions" type="button" class="py-1 px-2.5 rounded-lg bg-fuchsia-600/30 hover:bg-fuchsia-600/50 border border-fuchsia-500/50 text-fuchsia-100 font-semibold cursor-pointer">Supprimer les séances test</button>
+      </div>
+
+      <section id="testSection" class="hidden bg-slate-900/90 rounded-2xl border border-fuchsia-500/30 p-4 shadow-xl">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <div>
+            <h3 class="text-sm font-extrabold text-white flex items-center gap-2"><span>🧪</span> Mode test rapide</h3>
+            <p class="text-[11px] text-slate-400 mt-0.5">Simule la progression sans saisir manuellement des dizaines de séances.</p>
+          </div>
+          <span class="text-[10px] px-2 py-1 rounded-full bg-fuchsia-500/10 text-fuchsia-300 border border-fuchsia-500/30">TEST</span>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <button type="button" data-test-action="one" class="test-btn py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-bold transition">➕ 1 séance</button>
+          <button type="button" data-test-action="ten" class="test-btn py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-bold transition">⏩ 10 séances</button>
+          <div id="testJumpButtons" class="contents"></div>
+        </div>
+        <p class="text-[10px] text-slate-500 mt-2">Les simulations ne sont jamais enregistrées : elles disparaissent au rechargement de la page ou avec « Supprimer les séances test ».</p>
+      </section>
+
+      <details class="bg-slate-900/90 rounded-2xl border border-slate-800 text-xs p-3.5 transition group">
+        <summary class="font-bold text-slate-200 cursor-pointer flex items-center justify-between select-none">
+          <span class="flex items-center gap-2">
+            <span>🔬</span>
+            Comment sont calculées les calories en EPS ? (Formule METs & Big Mac)
+          </span>
+          <span class="text-slate-400 group-open:rotate-180 transition-transform">▼</span>
+        </summary>
+        <div class="mt-3 pt-3 border-t border-slate-800/80 text-slate-300 space-y-2">
+          <p>
+            <strong>Le calcul scientifique :</strong> La dépense énergétique est basée sur l'équivalent métabolique 
+            <code class="bg-slate-800 px-1 py-0.5 rounded text-amber-400">MET (Metabolic Equivalent of Task)</code> :
+          </p>
+          <div class="bg-slate-950 p-2.5 rounded-xl font-mono text-[11px] text-amber-200/90 border border-slate-800">
+            Dépense nette (kcal) = (MET − 1) × Poids moyen (kg) × Durée active (h) × Élèves × Classes
+          </div>
+          <p class="text-[11px] text-slate-400">
+            On retire 1 MET (métabolisme de repos) pour ne compter que le surcoût de l'effort. Les valeurs de MET sont
+            des ordres de grandeur inspirés du Compendium des activités physiques (données adultes) : le résultat est
+            une <strong>estimation approximative</strong>, pas une mesure. Le temps déclaré doit être le temps de pratique réellement actif.
+          </p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] pt-1">
+            <div class="p-2 bg-slate-800/50 rounded-lg">
+              🍔 <strong>Valeur nutritive :</strong> 1 Big Mac standard = <strong>508 kcal</strong>.
+            </div>
+            <div class="p-2 bg-slate-800/50 rounded-lg">
+              📏 <strong>Hauteur du burger :</strong> ~<strong>7 cm</strong> (0,07 m).
+            </div>
+            <div class="p-2 bg-slate-800/50 rounded-lg">
+              ⛰️ <strong>Hauteur de l'Everest :</strong> <strong>8 849 m</strong> (≈ 126 400 Big Macs).
+            </div>
+            <div class="p-2 bg-slate-800/50 rounded-lg">
+              🎯 <strong>Objectif final :</strong> l'Everest, avec des paliers intermédiaires : Pise, Statue de la Liberté, Pyramide de Khéops, Tour Eiffel, Empire State Building, Burj Khalifa, Mont Blanc…
+            </div>
+          </div>
+        </div>
+      </details>
+
+    </div>
+  </main>
+
+  <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 bg-slate-900 border border-amber-500/40 rounded-xl p-4 shadow-2xl flex items-center gap-3 text-sm pointer-events-none">
+    <div id="toastIcon" class="text-2xl">🎉</div>
+    <div>
+      <div id="toastTitle" class="font-bold text-white">Séance enregistrée !</div>
+      <div id="toastMsg" class="text-xs text-slate-300">+25 Big Macs ajoutés à la tour</div>
+    </div>
+  </div>
+
+  <script>
+    /* APSA SCOLAIRES COMMUNES ET EQUIVALENTS METS */
+    const EPS_ACTIVITIES = [
+      {
+        id: 'demi_fond',
+        name: 'Demi-fond / Course de durée / Cross',
+        group: 'Athlétisme & VMA',
+        desc: 'Allures régulées, travail aérobie continu et intermittent.',
+        mets: { low: 6.0, mid: 9.0, high: 12.0 }
+      },
+      {
+        id: 'sprint_relais',
+        name: 'Sprint / Relais-Vitesse / Haies',
+        group: 'Athlétisme & VMA',
+        desc: 'Efforts anaérobies brefs et intenses avec récupérations actives.',
+        mets: { low: 4.5, mid: 7.0, high: 10.0 }
+      },
+      {
+        id: 'lancers_sauts',
+        name: 'Sauts & Lancers (Longueur, Hauteur, Javelot)',
+        group: 'Athlétisme & VMA',
+        desc: 'Répétitions techniques, impulsions explosives et rotations.',
+        mets: { low: 3.5, mid: 5.0, high: 7.0 }
+      },
+      {
+        id: 'football',
+        name: 'Football / Futsal',
+        group: 'Sports Collectifs',
+        desc: 'Courses intermittentes, changements de direction, transitions rapides.',
+        mets: { low: 5.5, mid: 8.0, high: 10.5 }
+      },
+      {
+        id: 'handball',
+        name: 'Handball',
+        group: 'Sports Collectifs',
+        desc: 'Duels, montées de balle fulgurantes et sauts répétés.',
+        mets: { low: 5.5, mid: 8.5, high: 11.0 }
+      },
+      {
+        id: 'basketball',
+        name: 'Basketball / 3x3',
+        group: 'Sports Collectifs',
+        desc: 'Navettes continues, replis défensifs et rebonds explosifs.',
+        mets: { low: 5.0, mid: 7.5, high: 9.8 }
+      },
+      {
+        id: 'rugby_touch',
+        name: 'Rugby / Touch Rugby / Flag',
+        group: 'Sports Collectifs',
+        desc: 'Accélérations, plaquages sécurisés, replacement défensif dynamique.',
+        mets: { low: 6.0, mid: 8.5, high: 11.0 }
+      },
+      {
+        id: 'volleyball',
+        name: 'Volley-ball',
+        group: 'Sports Collectifs',
+        desc: 'Déplacements courts, flexions, extensions et blocs au filet.',
+        mets: { low: 3.5, mid: 5.5, high: 7.5 }
+      },
+      {
+        id: 'ultimate',
+        name: 'Ultimate Frisbee',
+        group: 'Sports Collectifs',
+        desc: 'Courses de démarquage intenses, arrêts-départs continuels.',
+        mets: { low: 5.0, mid: 7.5, high: 9.5 }
+      },
+      {
+        id: 'badminton',
+        name: 'Badminton (Simple & Double)',
+        group: 'Raquettes & Filet',
+        desc: 'Fentes, smashes, déplacements latéraux vifs et reprise d\'appuis.',
+        mets: { low: 4.5, mid: 7.0, high: 9.5 }
+      },
+      {
+        id: 'tennis_table',
+        name: 'Tennis de Table',
+        group: 'Raquettes & Filet',
+        desc: 'Vivacité, coordination œil-main, petits pas de replacement.',
+        mets: { low: 3.0, mid: 4.5, high: 6.5 }
+      },
+      {
+        id: 'natation',
+        name: 'Natation (Course / Sauvetage)',
+        group: 'Milieu Aquatique',
+        desc: 'Sollicitation cardio-respiratoire globale et résistance hydrique.',
+        mets: { low: 5.5, mid: 8.0, high: 11.0 }
+      },
+      {
+        id: 'gymnastique',
+        name: 'Gymnastique sportive / Acrosport',
+        group: 'Gymnastique & Artistique',
+        desc: 'Gainage, maintien de postures, voltiges et parades actives.',
+        mets: { low: 3.5, mid: 5.0, high: 7.0 }
+      },
+      {
+        id: 'danse_cirque',
+        name: 'Danse contemporaine / Arts du cirque',
+        group: 'Gymnastique & Artistique',
+        desc: 'Expression motrice, enchaînements chorégraphiés rythmés.',
+        mets: { low: 3.5, mid: 5.5, high: 7.5 }
+      },
+      {
+        id: 'escalade',
+        name: 'Escalade (Bloc / Voie)',
+        group: 'Pleine Nature & Duel',
+        desc: 'Force isométrique des avant-bras, gainage et poussée sur jambes.',
+        mets: { low: 4.5, mid: 7.0, high: 9.0 }
+      },
+      {
+        id: 'orientation',
+        name: 'Course d\'orientation',
+        group: 'Pleine Nature & Duel',
+        desc: 'Course en terrain varié, dénivelé et lecture de carte active.',
+        mets: { low: 5.5, mid: 8.0, high: 10.5 }
+      },
+      {
+        id: 'musculation_cross',
+        name: 'Musculation / Cross-training / Step',
+        group: 'Entretien de soi',
+        desc: 'Circuits training, renforcement musculaire avec ou sans charge.',
+        mets: { low: 4.5, mid: 7.0, high: 9.5 }
+      },
+      {
+        id: 'boxe_lutte',
+        name: 'Boxe française / Lutte / Combat',
+        group: 'Pleine Nature & Duel',
+        desc: 'Touches contrôlées, esquives, gainage dynamique et cardio élevé.',
+        mets: { low: 5.0, mid: 8.0, high: 10.5 }
+      }
+    ];
+
+    const CALORIES_PER_BIGMAC = 508;
+    const HEIGHT_PER_BIGMAC_METERS = 0.07;
+    const GOAL = { id: 'everest', label: 'Everest (8 849 m)', height: 8849 };
+
+    const MILESTONES = [
+      { height: 0, name: "Sol de l'Établissement", icon: "🏫", desc: "La première boîte est posée sur le terrain d'EPS." },
+      { height: 10, name: "Toit du Collège/Lycée", icon: "🏢", desc: "La pile dépasse le gymnase scolaire !" },
+      { height: 56, name: "Tour de Pise", icon: "🏛️", desc: "Plus haute que la célèbre tour penchée !" },
+      { height: 93, name: "Statue de la Liberté", icon: "🗽", desc: "La torche de Lady Liberty est dépassée !" },
+      { height: 139, name: "Pyramide de Khéops", icon: "🔺", desc: "Plus haut que la Grande Pyramide d'Égypte !" },
+      { height: 210, name: "Tour Montparnasse", icon: "🏬", desc: "Le gratte-ciel parisien est dominé !" },
+      { height: 330, name: "Sommet Tour Eiffel", icon: "🗼", desc: "La tour de Big Macs rivalise avec la dame de fer !" },
+      { height: 443, name: "Empire State Building", icon: "🏙️", desc: "New York est à vos pieds, antenne comprise !" },
+      { height: 828, name: "Burj Khalifa", icon: "🌆", desc: "Plus haut que le plus haut gratte-ciel du monde !" },
+      { height: 1912, name: "Mont Ventoux", icon: "🚴", desc: "Le géant de Provence, juge de paix du Tour de France !" },
+      { height: 4809, name: "Sommet du Mont Blanc", icon: "🏔️", desc: "Le toit de l'Europe occidentale est atteint !" },
+      { height: 5895, name: "Kilimandjaro", icon: "🌋", desc: "Le toit de l'Afrique est conquis !" },
+      { height: 8849, name: "Mont Everest", icon: "⛰️", desc: "MISSION ACCOMPLIE ! Le toit du monde est atteint grâce à vos efforts en EPS !" }
+    ];
+
+    // Objectifs de l'établissement (écran « Mon établissement »)
+    const CLASS_GOAL = { id: 'chateau-eau', label: "Château d'eau (40 m)", height: 40 };
+    const CLASS_MILESTONES = [
+      { height: 0, name: "Sol de la cour", icon: "🏫", desc: "Votre première pile de Big Macs est posée dans la cour." },
+      { height: 1.4, name: "Plus haut qu'un élève de CM1", icon: "🧒", desc: "Votre tour dépasse déjà un élève de CM1 !" },
+      { height: 1.75, name: "Plus haut que le professeur", icon: "🧑‍🏫", desc: "Même l'enseignant doit lever la tête !" },
+      { height: 8, name: "Plus haut que l'arbre", icon: "🌳", desc: "La tour dépasse le grand arbre de la cour !" },
+      { height: 12, name: "Plus haut que l'école", icon: "🏫", desc: "Le toit de l'école est dépassé !" },
+      { height: 40, name: "Plus haut que le château d'eau", icon: "💧", desc: "MISSION ACCOMPLIE ! Le château d'eau est dépassé grâce à vos séances d'EPS !" }
+    ];
+
+    let audioCtx = null;
+    let soundEnabled = true;
+
+    function initAudio() {
+      if (!audioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) audioCtx = new AudioContextClass();
+      }
+    }
+
+    function playSound(type) {
+      if (!soundEnabled) return;
+      try {
+        initAudio();
+        if (!audioCtx) return;
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+
+        const now = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        if (type === 'pop') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(320, now);
+          osc.frequency.exponentialRampToValueAtTime(800, now + 0.12);
+          gain.gain.setValueAtTime(0.2, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+          osc.start(now);
+          osc.stop(now + 0.12);
+        } else if (type === 'rocket') {
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(120, now);
+          osc.frequency.exponentialRampToValueAtTime(450, now + 0.4);
+          gain.gain.setValueAtTime(0.25, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.45);
+          osc.start(now);
+          osc.stop(now + 0.45);
+        }
+      } catch (e) {
+        console.warn('Audio non disponible', e);
+      }
+    }
+
+    // ======================================================================
+    // CONFIGURATION FIREBASE
+    // Collez ici la configuration de votre application web Firebase
+    // (Console Firebase > Paramètres du projet > Vos applications > Configuration SDK).
+    // Laissez `null` pour le mode démonstration local (données NON partagées).
+    // Exemple :
+    //   const FIREBASE_CONFIG = { apiKey: "...", authDomain: "xxx.firebaseapp.com", projectId: "xxx", appId: "..." };
+    // ======================================================================
+    const FIREBASE_CONFIG = {
+      apiKey: "AIzaSyD3uoDNAd8v8Om39cydfp7mdz_L_BNvHjE",
+      authDomain: "hamburger-6d3aa.firebaseapp.com",
+      projectId: "hamburger-6d3aa",
+      storageBucket: "hamburger-6d3aa.firebasestorage.app",
+      messagingSenderId: "346219098524",
+      appId: "1:346219098524:web:bd47a652c0aa7bf3415859"
+    };
+    const TEST_MODE = new URLSearchParams(window.location.search).get('test') === '1';
+
+    let appState = {
+      mySessions: [],     // séances de l'établissement connecté
+      etabs: [],          // tous les établissements (alimente le cumul collectif)
+      testSessions: [],   // simulations (mémoire uniquement, jamais enregistrées)
+      user: null,         // établissement connecté
+      selectedIntensity: 'mid',
+      view: 'collective', // 'collective' (cumul) ou 'class' (mon établissement)
+      totalCalories: 0,
+      totalBurgers: 0,
+      totalHeightMeters: 0
+    };
+    let store = null;
+
+    function activeMilestones() {
+      return appState.view === 'class' ? CLASS_MILESTONES : MILESTONES;
+    }
+
+    function getGoal() {
+      return appState.view === 'class' ? CLASS_GOAL : GOAL;
+    }
+
+    function el(tag, className, text) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text !== undefined) node.textContent = text;
+      return node;
+    }
+
+    function randomInt(max) {
+      const buf = new Uint32Array(1);
+      crypto.getRandomValues(buf);
+      return buf[0] % max;
+    }
+
+    function cleanText(v, max) {
+      return String(v || '').replace(/\s+/g, ' ').trim().slice(0, max);
+    }
+
+    function friendlyError(err) {
+      const code = (err && err.code) || '';
+      if (['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found'].includes(code)) return 'Adresse e-mail ou mot de passe incorrect.';
+      if (code === 'auth/invalid-email') return 'Adresse e-mail invalide.';
+      if (code === 'auth/email-already-in-use') return 'Un compte existe déjà avec cette adresse e-mail. Utilisez « Se connecter ».';
+      if (code === 'auth/weak-password') return 'Mot de passe trop faible (8 caractères minimum).';
+      if (code === 'auth/too-many-requests') return 'Trop de tentatives. Réessayez dans quelques minutes.';
+      if (code === 'auth/network-request-failed' || code === 'unavailable') return 'Connexion impossible. Vérifiez votre accès Internet.';
+      if (code === 'auth/operation-not-allowed') return "La connexion par e-mail/mot de passe n'est pas activée dans Firebase.";
+      if (code === 'permission-denied') return "Action refusée par les règles de sécurité.";
+      return (err && err.message) ? err.message : 'Une erreur est survenue.';
+    }
+
+    // ---------------------------------------------------------------- Firebase
+    function createFirebaseStore(cfg) {
+      firebase.initializeApp(cfg);
+      const auth = firebase.auth();
+      const db = firebase.firestore();
+      const inc = firebase.firestore.FieldValue.increment;
+      let unsubDoc = null;
+      let lastDocData = null;
+      let emitUser = () => {};
+      let unsubSessions = null;
+
+      return {
+        mode: 'firebase',
+
+        start({ onEtabs, onUser, onSessions, onError }) {
+          // Cumul collectif : lecture publique de la collection des établissements (totaux uniquement).
+          db.collection('etablissements').onSnapshot(
+            snap => onEtabs(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+            onError
+          );
+          auth.onAuthStateChanged(user => {
+            if (unsubDoc) { unsubDoc(); unsubDoc = null; }
+            if (unsubSessions) { unsubSessions(); unsubSessions = null; }
+            if (!user) { onUser(null); onSessions([]); return; }
+            const ref = db.collection('etablissements').doc(user.uid);
+            // Le document est créé juste après le compte : on attend son apparition.
+            lastDocData = null;
+            emitUser = () => {
+              const u = auth.currentUser;
+              if (u && lastDocData) onUser({ uid: u.uid, email: u.email, emailVerified: u.emailVerified, ...lastDocData });
+            };
+            unsubDoc = ref.onSnapshot(d => { if (d.exists) { lastDocData = d.data(); emitUser(); } }, onError);
+            unsubSessions = ref.collection('seances').orderBy('createdAtMs').onSnapshot(
+              snap => onSessions(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+              onError
+            );
+          });
+        },
+
+        async register({ name, city, country, email, password }) {
+          const cred = await auth.createUserWithEmailAndPassword(email, password);
+          // L'e-mail n'est JAMAIS copié dans le document public : il reste dans Firebase Authentication.
+          await db.collection('etablissements').doc(cred.user.uid).set({
+            name, city, country,
+            totalKcal: 0, totalBurgers: 0, sessionsCount: 0,
+            createdAtMs: Date.now()
+          });
+          // E-mail de confirmation : la saisie des séances reste bloquée tant que l'adresse n'est pas confirmée.
+          try { await cred.user.sendEmailVerification(); } catch (err) { console.warn("E-mail de confirmation non envoyé :", err); }
+        },
+
+        async login(email, password) {
+          await auth.signInWithEmailAndPassword(email, password);
+        },
+
+        async resetPassword(email) {
+          await auth.sendPasswordResetEmail(email);
+        },
+
+        async resendVerification() {
+          if (!auth.currentUser) throw new Error('Non connecté');
+          await auth.currentUser.sendEmailVerification();
+        },
+
+        // Recharge l'utilisateur et renouvelle son jeton : nécessaire pour que les règles voient l'adresse confirmée.
+        async refreshUser() {
+          const u = auth.currentUser;
+          if (!u) return false;
+          await u.reload();
+          if (u.emailVerified) await u.getIdToken(true);
+          emitUser();
+          return u.emailVerified;
+        },
+
+        async logout() { await auth.signOut(); },
+
+        async addSession(session) {
+          const user = auth.currentUser;
+          if (!user) throw new Error('Non connecté');
+          const ref = db.collection('etablissements').doc(user.uid);
+          const batch = db.batch();
+          batch.set(ref.collection('seances').doc(), session);
+          batch.update(ref, {
+            totalKcal: inc(session.calories),
+            totalBurgers: inc(session.burgers),
+            sessionsCount: inc(1),
+            lastSessionAtMs: Date.now()
+          });
+          await batch.commit();
+        },
+
+        async deleteSession(session) {
+          const user = auth.currentUser;
+          if (!user) throw new Error('Non connecté');
+          const ref = db.collection('etablissements').doc(user.uid);
+          const batch = db.batch();
+          batch.delete(ref.collection('seances').doc(session.id));
+          batch.update(ref, {
+            totalKcal: inc(-session.calories),
+            totalBurgers: inc(-session.burgers),
+            sessionsCount: inc(-1)
+          });
+          await batch.commit();
+        }
+      };
+    }
+
+    // ------------------------------------------------- Démo locale (sans serveur)
+    function createLocalStore() {
+      const KEY = 'eps_everest_demo_v1';
+      let db = { accounts: {}, sessions: {}, current: null };
+      try { const raw = localStorage.getItem(KEY); if (raw) db = JSON.parse(raw); } catch (e) { /* stockage indisponible */ }
+      const save = () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { /* ignoré */ } };
+      let cb = null;
+
+      const etabList = () => Object.values(db.accounts).map(a => {
+        const list = db.sessions[a.id] || [];
+        return {
+          id: a.id, name: a.name, city: a.city, country: a.country,
+          totalKcal: list.reduce((t, x) => t + (x.calories || 0), 0),
+          totalBurgers: list.reduce((t, x) => t + (x.burgers || 0), 0),
+          sessionsCount: list.length
+        };
+      });
+      const emit = () => {
+        cb.onEtabs(etabList());
+        const a = db.current && db.accounts[db.current];
+        cb.onUser(a ? { uid: a.id, email: a.email, emailVerified: !!a.verified, name: a.name, city: a.city, country: a.country } : null);
+        cb.onSessions(a ? (db.sessions[a.id] || []).slice().sort((x, y) => x.createdAtMs - y.createdAtMs) : []);
+      };
+
+      return {
+        mode: 'local',
+        start(callbacks) { cb = callbacks; emit(); },
+
+        async register({ name, city, country, email, password }) {
+          if (Object.values(db.accounts).some(a => a.email === email)) { const e = new Error('exists'); e.code = 'auth/email-already-in-use'; throw e; }
+          const id = 'local_' + Date.now().toString(36) + randomInt(1e6).toString(36);
+          db.accounts[id] = { id, name, city, country, email, password, verified: false };
+          db.sessions[id] = [];
+          db.current = id;
+          save(); emit();
+        },
+
+        async login(email, password) {
+          const a = Object.values(db.accounts).find(x => x.email === email);
+          if (!a || a.password !== password) { const e = new Error('bad'); e.code = 'auth/invalid-credential'; throw e; }
+          db.current = a.id; save(); emit();
+        },
+
+        async resetPassword() { /* démonstration : aucun e-mail n'est envoyé */ },
+        async resendVerification() { /* démonstration : aucun e-mail n'est envoyé */ },
+        async refreshUser() {
+          // Démonstration : le clic sur « J'ai confirmé » simule la confirmation.
+          const a = db.current && db.accounts[db.current];
+          if (a) { a.verified = true; save(); emit(); }
+          return true;
+        },
+
+        async logout() { db.current = null; save(); emit(); },
+
+        async addSession(session) {
+          if (!db.current) throw new Error('Non connecté');
+          db.sessions[db.current].push({ id: 's_' + Date.now() + '_' + randomInt(1e6), ...session });
+          save(); emit();
+        },
+
+        async deleteSession(session) {
+          if (!db.current) throw new Error('Non connecté');
+          db.sessions[db.current] = db.sessions[db.current].filter(x => x.id !== session.id);
+          save(); emit();
+        }
+      };
+    }
+
+    // Cumul collectif = somme des établissements + simulations éventuelles (mode test).
+    function recalculateTotals() {
+      let cal = 0;
+      let bur = 0;
+      if (appState.view === 'class') {
+        // Écran « Mon établissement » : uniquement les totaux de l'établissement connecté.
+        const me = appState.user && appState.etabs.find(e => e.id === appState.user.uid);
+        if (me) {
+          cal = Number(me.totalKcal) || 0;
+          bur = Number(me.totalBurgers) || 0;
+        }
+      } else {
+        appState.etabs.forEach(e => {
+          cal += Number(e.totalKcal) || 0;
+          bur += Number(e.totalBurgers) || 0;
+        });
+      }
+      appState.testSessions.forEach(t => {
+        cal += t.calories;
+        bur += t.burgers;
+      });
+      appState.totalCalories = Math.round(cal);
+      appState.totalBurgers = Math.round(bur);
+      appState.totalHeightMeters = bur * HEIGHT_PER_BIGMAC_METERS; // non arrondi : les paliers se franchissent au centimètre près
+    }
+
+    function formatNumberFr(num, decimals = 0) {
+      return new Intl.NumberFormat('fr-FR', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals
+      }).format(num);
+    }
+
+    const activitySelect = document.getElementById('activitySelect');
+    const activityDesc = document.getElementById('activityDescription');
+    const studentCountInput = document.getElementById('studentCount');
+    const averageWeightInput = document.getElementById('averageWeight');
+    const durationRange = document.getElementById('durationRange');
+    const durationBadge = document.getElementById('durationBadge');
+    const sessionPreviewCalories = document.getElementById('sessionPreviewCalories');
+    const sessionPerPupilCalories = document.getElementById('sessionPerPupilCalories');
+    const sessionPreviewBurgers = document.getElementById('sessionPreviewBurgers');
+    const sessionPreviewHeight = document.getElementById('sessionPreviewHeight');
+    const sessionForm = document.getElementById('sessionForm');
+    const intensityBtns = document.querySelectorAll('.intensity-btn');
+
+    const statTotalKcal = document.getElementById('statTotalKcal');
+    const statTotalBurgers = document.getElementById('statTotalBurgers');
+    const statTotalHeight = document.getElementById('statTotalHeight');
+    const statHeightSub = document.getElementById('statHeightSub');
+    const statPercentGoal = document.getElementById('statPercentGoal');
+    const classCountInput = document.getElementById('classCount');
+    const testSection = document.getElementById('testSection');
+    const testSessionsBanner = document.getElementById('testSessionsBanner');
+    const testSessionsCount = document.getElementById('testSessionsCount');
+    const btnDeleteTestSessions = document.getElementById('btnDeleteTestSessions');
+    const badgeTotalBurgers = document.getElementById('badgeTotalBurgers');
+
+    const currentMilestoneIcon = document.getElementById('currentMilestoneIcon');
+    const currentMilestoneName = document.getElementById('currentMilestoneName');
+    const currentMilestoneDesc = document.getElementById('currentMilestoneDesc');
+    const milestoneProgressBar = document.getElementById('milestoneProgressBar');
+    const nextMilestoneTarget = document.getElementById('nextMilestoneTarget');
+
+    const historyListContainer = document.getElementById('historyListContainer');
+    const emptyHistoryMsg = document.getElementById('emptyHistoryMsg');
+    const historyCountBadge = document.getElementById('historyCountBadge');
+
+    const btnSoundToggle = document.getElementById('btnSoundToggle');
+    const soundIcon = document.getElementById('soundIcon');
+    const soundLabel = document.getElementById('soundLabel');
+    const btnExportData = document.getElementById('btnExportData');
+    const btnAddSession = document.getElementById('btnAddSession');
+    const authCard = document.getElementById('authCard');
+    const teacherBar = document.getElementById('teacherBar');
+    const sessionSection = document.getElementById('sessionSection');
+    const journalSection = document.getElementById('journalSection');
+    const registerForm = document.getElementById('registerForm');
+    const loginForm = document.getElementById('loginForm');
+    const tabRegister = document.getElementById('tabRegister');
+    const tabLogin = document.getElementById('tabLogin');
+
+    function populateActivities() {
+      const groups = {};
+      EPS_ACTIVITIES.forEach(act => {
+        if (!groups[act.group]) groups[act.group] = [];
+        groups[act.group].push(act);
+      });
+
+      activitySelect.innerHTML = '';
+      for (const [groupName, acts] of Object.entries(groups)) {
+        const optgroup = document.createElement('optgroup');
+        optgroup.label = `── ${groupName} ──`;
+        acts.forEach(a => {
+          const opt = document.createElement('option');
+          opt.value = a.id;
+          opt.textContent = a.name;
+          optgroup.appendChild(opt);
+        });
+        activitySelect.appendChild(optgroup);
+      }
+
+      activitySelect.value = 'demi_fond';
+      updateActivityDetails();
+    }
+
+    function updateActivityDetails() {
+      const act = EPS_ACTIVITIES.find(a => a.id === activitySelect.value);
+      if (act) {
+        activityDesc.textContent = act.desc;
+      }
+      updatePreviewCalculations();
+    }
+
+    intensityBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        appState.selectedIntensity = btn.dataset.intensity;
+        intensityBtns.forEach(b => {
+          b.classList.remove('border-2', 'border-amber-500', 'bg-amber-500/15', 'text-amber-300', 'font-bold');
+          b.classList.add('border-slate-700', 'bg-slate-800/80', 'text-slate-300');
+        });
+        btn.classList.remove('border-slate-700', 'bg-slate-800/80', 'text-slate-300');
+        btn.classList.add('border-2', 'border-amber-500', 'bg-amber-500/15', 'text-amber-300', 'font-bold');
+        playSound('pop');
+        updatePreviewCalculations();
+      });
+    });
+
+    function computeCurrentSessionValues() {
+      const act = EPS_ACTIVITIES.find(a => a.id === activitySelect.value) || EPS_ACTIVITIES[0];
+      const students = Math.max(1, parseInt(studentCountInput.value) || 18);
+      const classes = Math.min(30, Math.max(1, parseInt(classCountInput.value) || 1));
+      const weight = Math.max(20, parseFloat(averageWeightInput.value) || 20);
+      const minutes = parseInt(durationRange.value) || 30;
+      const hours = minutes / 60;
+      const met = act.mets[appState.selectedIntensity] || 7.0;
+      // Dépense nette : on retire 1 MET (repos) pour ne compter que le surcoût de l'effort.
+      const netMet = Math.max(0, met - 1);
+
+      const totalKcal = Math.round(netMet * weight * hours * students * classes);
+      const kcalPerPupil = Math.round(totalKcal / (students * classes));
+      const burgers = parseFloat((totalKcal / CALORIES_PER_BIGMAC).toFixed(1));
+      const heightMeters = parseFloat((burgers * HEIGHT_PER_BIGMAC_METERS).toFixed(2));
+
+      return {
+        activity: act,
+        students,
+        classes,
+        weight,
+        minutes,
+        intensity: appState.selectedIntensity,
+        met,
+        totalKcal,
+        kcalPerPupil,
+        burgers,
+        heightMeters
+      };
+    }
+
+    function updatePreviewCalculations() {
+      const current = computeCurrentSessionValues();
+      sessionPreviewCalories.textContent = formatNumberFr(current.totalKcal);
+      sessionPerPupilCalories.textContent = formatNumberFr(current.kcalPerPupil);
+      sessionPreviewBurgers.textContent = formatNumberFr(current.burgers, 1);
+      sessionPreviewHeight.textContent = formatNumberFr(current.heightMeters, 1);
+      durationBadge.textContent = `${current.minutes} min`;
+    }
+
+    // Compact : 12 345 → "12,3 k", 5 491 428 571 → "5,5 Md"
+    function formatCompact(n) {
+      if (n >= 1e9) return `${formatNumberFr(n / 1e9, 1)} Md`;
+      if (n >= 1e6) return `${formatNumberFr(n / 1e6, 1)} M`;
+      if (n >= 1e4) return `${formatNumberFr(n / 1e3, 1)} k`;
+      return formatNumberFr(n);
+    }
+
+    function renderRoadmap() {
+      const list = document.getElementById('roadmapList');
+      if (!list) return;
+      list.innerHTML = '';
+      const goal = getGoal();
+      const el = (tag, cls, text) => {
+        const n = document.createElement(tag);
+        if (cls) n.className = cls;
+        if (text !== undefined) n.textContent = text;
+        return n;
+      };
+
+      activeMilestones().filter(m => m.height > 0).forEach(m => {
+        const burgersNeeded = Math.ceil(m.height / HEIGHT_PER_BIGMAC_METERS);
+        const kcalNeeded = burgersNeeded * CALORIES_PER_BIGMAC;
+        const pct = Math.min(100, (appState.totalHeightMeters / m.height) * 100);
+        const reached = appState.totalHeightMeters >= m.height;
+        const isGoal = Math.abs(goal.height - m.height) < 1;
+        const burgersLeft = reached ? 0 : Math.ceil(Math.max(0, burgersNeeded - appState.totalBurgers));
+
+        const row = el('div', 'rounded-lg border px-2.5 py-1.5 ' +
+          (isGoal ? 'border-amber-500/60 bg-amber-500/10' : reached ? 'border-emerald-700/40 bg-emerald-900/10' : 'border-slate-800 bg-slate-800/40'));
+
+        const top = el('div', 'flex items-center justify-between gap-2 text-xs');
+        const name = el('div', 'font-semibold truncate ' + (reached ? 'text-emerald-300' : 'text-slate-200'),
+          `${reached ? '✔' : m.icon} ${m.name}`);
+        const right = el('div', 'flex items-center gap-2 shrink-0');
+        right.appendChild(el('span', 'text-[10px] text-slate-400 font-mono', formatAltitude(m.height)));
+        if (isGoal) {
+          right.appendChild(el('span', 'text-[10px] px-1.5 rounded bg-amber-500/30 text-amber-200 font-bold', 'OBJECTIF'));
+        }
+        top.append(name, right);
+
+        const bar = el('div', 'h-1 rounded-full bg-slate-700 overflow-hidden mt-1');
+        const fill = el('div', 'h-full rounded-full ' + (reached ? 'bg-emerald-400' : 'bg-amber-400'));
+        fill.style.width = `${pct.toFixed(2)}%`;
+        bar.appendChild(fill);
+
+        const detail = el('div', 'text-[10px] text-slate-400 mt-1',
+          `${formatCompact(burgersNeeded)} 🍔 · ${formatCompact(kcalNeeded)} kcal · ` +
+          (reached ? 'atteint' : `encore ${formatCompact(burgersLeft)} 🍔`));
+
+        row.append(top, bar, detail);
+        list.appendChild(row);
+      });
+    }
+
+    function getCurrentMilestoneInfo(heightMeters) {
+      let currentIdx = 0;
+      const ms = activeMilestones();
+      for (let i = 0; i < ms.length; i++) {
+        if (heightMeters >= ms[i].height) {
+          currentIdx = i;
+        } else {
+          break;
+        }
+      }
+
+      const current = ms[currentIdx];
+      const next = ms[currentIdx + 1] || null;
+
+      let progressPct = 100;
+      if (next) {
+        const span = next.height - current.height;
+        const currentProgress = heightMeters - current.height;
+        progressPct = Math.min(100, Math.max(0, (currentProgress / span) * 100));
+      }
+
+      return { current, next, progressPct };
+    }
+
+    function updateDashboard() {
+      recalculateTotals();
+
+      statTotalKcal.textContent = formatNumberFr(appState.totalCalories);
+      statTotalBurgers.textContent = formatNumberFr(appState.totalBurgers);
+      badgeTotalBurgers.textContent = formatNumberFr(appState.totalBurgers);
+
+      const heightM = appState.totalHeightMeters;
+      if (heightM < 1000) {
+        statTotalHeight.textContent = `${formatNumberFr(heightM, 1)} m`;
+        statHeightSub.textContent = `${formatNumberFr(heightM / 1000, 3)} km`;
+      } else {
+        statTotalHeight.textContent = `${formatNumberFr(heightM / 1000, 2)} km`;
+        statHeightSub.textContent = `${formatNumberFr(heightM, 0)} mètres`;
+      }
+
+      const goal = getGoal();
+      const pctGoal = Math.min(100, (heightM / goal.height) * 100);
+      if (pctGoal < 0.001 && heightM > 0) {
+        statPercentGoal.textContent = `< 0,001 %`;
+      } else {
+        statPercentGoal.textContent = `${formatNumberFr(pctGoal, pctGoal >= 10 ? 1 : 3)} %`;
+      }
+
+      const testCount = appState.testSessions.length;
+      testSessionsCount.textContent = testCount;
+      testSessionsBanner.classList.toggle('hidden', testCount === 0);
+      requestRedraw();
+
+      const mInfo = getCurrentMilestoneInfo(heightM);
+      currentMilestoneIcon.textContent = mInfo.current.icon;
+      currentMilestoneName.textContent = mInfo.current.name;
+      currentMilestoneDesc.textContent = mInfo.current.desc;
+      milestoneProgressBar.style.width = `${mInfo.progressPct.toFixed(1)}%`;
+
+      if (mInfo.next) {
+        const nextDistStr = formatAltitude(mInfo.next.height);
+        nextMilestoneTarget.textContent = `${mInfo.next.name} (${nextDistStr})`;
+      } else {
+        nextMilestoneTarget.textContent = "Everest atteint ! 🏆";
+      }
+
+      renderHistoryList();
+      renderRoadmap();
+      renderLeaderboard();
+      renderMyStats();
+      applyViewTexts();
+    }
+
+    function renderHistoryList() {
+      const sessions = appState.mySessions;
+      historyCountBadge.textContent = `${sessions.length} séance${sessions.length > 1 ? 's' : ''}`;
+      historyListContainer.innerHTML = '';
+
+      if (sessions.length === 0) {
+        historyListContainer.appendChild(emptyHistoryMsg);
+        return;
+      }
+
+      const intensityLabels = { low: 'Modérée', mid: 'Soutenue', high: 'Vigoureuse' };
+      const formatDay = iso => /^\d{4}-\d{2}-\d{2}$/.test(iso)
+        ? new Date(iso + 'T00:00:00').toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
+        : String(iso);
+
+      [...sessions].reverse().forEach((s) => {
+        const item = el('div', 'p-2.5 rounded-xl border bg-slate-800/60 border-slate-700/60 flex items-center justify-between gap-2 hover:border-slate-600 transition');
+
+        const info = el('div', 'flex-1 min-w-0');
+        const title = el('div', 'flex items-center gap-1.5 font-bold text-slate-200 truncate');
+        title.appendChild(el('span', '', s.activityName));
+        title.appendChild(el('span', 'text-[10px] px-1.5 rounded bg-slate-700 text-slate-300 font-normal', intensityLabels[s.intensity] || String(s.intensity)));
+        info.appendChild(title);
+
+        const meta = el('div', 'text-[11px] text-slate-400 mt-0.5 flex flex-wrap gap-x-2');
+        meta.appendChild(el('span', '', `📅 ${formatDay(s.date)}`));
+        const classes = Number(s.classes) || 1;
+        meta.appendChild(el('span', '', `👥 ${s.students} élèves${classes > 1 ? ' × ' + classes + ' classes' : ''}`));
+        meta.appendChild(el('span', '', `⏱️ ${s.minutes} min`));
+        info.appendChild(meta);
+
+        const totals = el('div', 'text-right shrink-0');
+        totals.appendChild(el('div', 'text-xs font-black text-amber-400 font-mono', `+${formatNumberFr(s.burgers, 1)} 🍔`));
+        totals.appendChild(el('div', 'text-[10px] text-slate-400', `${formatNumberFr(s.calories)} kcal`));
+
+        const del = el('button', 'btn-delete-session p-1 hover:text-red-400 text-slate-500 rounded transition ml-1 cursor-pointer', '✕');
+        del.title = 'Supprimer cette séance';
+        del.type = 'button';
+        del.addEventListener('click', async () => {
+          if (!confirm('Supprimer cette séance ? Le cumul collectif sera mis à jour.')) return;
+          try {
+            await store.deleteSession(s);
+            showToast("🗑️ Séance supprimée", "Le cumul a été mis à jour.");
+          } catch (err) {
+            showToast("⚠️ Suppression impossible", friendlyError(err));
+          }
+        });
+
+        item.append(info, totals, del);
+        historyListContainer.appendChild(item);
+      });
+    }
+
+    function renderLeaderboard() {
+      const list = document.getElementById('leaderboardList');
+      const etabs = [...appState.etabs].sort((a, b) => (Number(b.totalBurgers) || 0) - (Number(a.totalBurgers) || 0));
+      document.getElementById('etabCountBadge').textContent = `${etabs.length} établissement${etabs.length > 1 ? 's' : ''}`;
+      document.getElementById('badgeEtabs').textContent = formatNumberFr(etabs.length);
+      list.innerHTML = '';
+
+      if (etabs.length === 0) {
+        list.appendChild(el('div', 'text-slate-500 text-center py-6', "Aucun établissement inscrit pour le moment. Soyez le premier !"));
+        return;
+      }
+
+      const max = Math.max(1, Number(etabs[0].totalBurgers) || 0);
+      const medals = ['🥇', '🥈', '🥉'];
+      etabs.slice(0, 100).forEach((e, i) => {
+        const mine = appState.user && e.id === appState.user.uid;
+        const burgers = Number(e.totalBurgers) || 0;
+        const row = el('div', 'rounded-lg border px-2.5 py-1.5 ' + (mine ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-slate-800 bg-slate-800/40'));
+
+        const top = el('div', 'flex items-center justify-between gap-2');
+        const label = [e.name, e.city].filter(Boolean).join(' · ');
+        top.appendChild(el('div', 'font-semibold text-slate-200 truncate', `${medals[i] || '#' + (i + 1)} ${label}${mine ? ' (vous)' : ''}`));
+        top.appendChild(el('div', 'shrink-0 font-mono text-amber-400 font-bold', `${formatNumberFr(burgers)} 🍔`));
+
+        const bar = el('div', 'h-1 rounded-full bg-slate-700 overflow-hidden mt-1');
+        const fill = el('div', 'h-full rounded-full ' + (mine ? 'bg-emerald-400' : 'bg-amber-400'));
+        fill.style.width = `${Math.max(1, (burgers / max) * 100).toFixed(1)}%`;
+        bar.appendChild(fill);
+
+        const sub = el('div', 'text-[10px] text-slate-400 mt-1',
+          `${formatNumberFr(burgers * HEIGHT_PER_BIGMAC_METERS, 1)} m · ${formatNumberFr(Number(e.sessionsCount) || 0)} séance(s)`);
+        row.append(top, bar, sub);
+        list.appendChild(row);
+      });
+    }
+
+    function renderMyStats() {
+      const me = appState.user && appState.etabs.find(e => e.id === appState.user.uid);
+      const burgers = me ? Number(me.totalBurgers) || 0 : 0;
+      document.getElementById('myStatSessions').textContent = formatNumberFr(me ? Number(me.sessionsCount) || 0 : 0);
+      document.getElementById('myStatBurgers').textContent = formatNumberFr(burgers);
+      const allBurgers = appState.etabs.reduce((t, e) => t + (Number(e.totalBurgers) || 0), 0);
+      const share = allBurgers > 0 ? (burgers / allBurgers) * 100 : 0;
+      document.getElementById('myStatShare').textContent = `${formatNumberFr(share, share >= 10 ? 0 : 1)} %`;
+    }
+
+    let verifyTimer = null;
+
+    function renderTestJumpButtons() {
+      const box = document.getElementById('testJumpButtons');
+      if (!box) return;
+      box.innerHTML = '';
+      const jumps = appState.view === 'class'
+        ? [['Élève de CM1', 1.4, '🧒'], ['Professeur', 1.75, '🧑‍🏫'], ['Arbre', 8, '🌳'], ['École', 12, '🏫'], ["Château d'eau", 40, '💧']]
+        : [['Tour de Pise', 56, '🏛️'], ['Tour Eiffel', 330, '🗼'], ['Mont Blanc', 4809, '🏔️'], ['Everest', 8849, '⛰️']];
+      jumps.forEach(([label, height, icon]) => {
+        const b = el('button', 'py-2.5 px-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs font-bold transition cursor-pointer', `${icon} ${label}`);
+        b.type = 'button';
+        b.addEventListener('click', () => jumpToTestHeight(height, label, icon));
+        box.appendChild(b);
+      });
+    }
+
+    function applyViewTexts() {
+      const cls = appState.view === 'class';
+      document.getElementById('statKcalSub').textContent = cls ? "kcal de mon établissement" : 'kcal collectif';
+      document.getElementById('statGoalTitle').textContent = cls ? "Cap vers le château d'eau" : "Cap vers l'Everest";
+      document.getElementById('statGoalSub').textContent = `Objectif final : ${formatNumberFr(getGoal().height)} m`;
+      document.getElementById('roadmapTitle').textContent = cls ? 'Feuille de route : mon établissement' : 'Feuille de route : cumul collectif';
+      document.getElementById('roadmapSub').textContent = cls ? "Big Macs restants pour chaque objectif de l'établissement" : 'Big Macs restants pour chaque palier (cumul collectif)';
+      document.getElementById('leaderboardSection').classList.toggle('hidden', cls);
+      const on = ['bg-amber-500', 'text-slate-950'];
+      const off = ['text-slate-300', 'hover:bg-slate-700'];
+      const tc = document.getElementById('tabViewCollective');
+      const tk = document.getElementById('tabViewClass');
+      [tc, tk].forEach(t => t.classList.remove(...on, ...off));
+      tc.classList.add(...(cls ? off : on));
+      tk.classList.add(...(cls ? on : off));
+    }
+
+    function setView(view) {
+      if (appState.view === view) return;
+      appState.view = view;
+      cameraMaxAltitude = getTargetCameraMaxAltitude(); // pas de transition entre deux échelles très différentes
+      particles = [];
+      renderTestJumpButtons();
+      updateDashboard();
+    }
+
+    let autoViewUid = null;
+
+    function renderAuthState() {
+      const user = appState.user;
+      authCard.classList.toggle('hidden', !!user);
+      teacherBar.classList.toggle('hidden', !user);
+      const verified = !!(user && user.emailVerified);
+      document.getElementById('verifyCard').classList.toggle('hidden', !(user && !verified));
+      sessionSection.classList.toggle('hidden', !verified);
+      journalSection.classList.toggle('hidden', !verified);
+      if (user && !verified) document.getElementById('verifyEmail').textContent = user.email || '';
+      // Établissement confirmé : on ouvre automatiquement son écran (une fois par connexion).
+      if (verified && autoViewUid !== user.uid) { autoViewUid = user.uid; setView('class'); }
+      if (!verified && appState.view === 'class') setView('collective');
+      if (!user) autoViewUid = null;
+      // En ligne, on vérifie régulièrement si l'adresse a été confirmée (déblocage automatique).
+      if (user && !verified && store && store.mode === 'firebase') {
+        if (!verifyTimer) verifyTimer = setInterval(() => { store.refreshUser().catch(() => {}); }, 5000);
+      } else if (verifyTimer) {
+        clearInterval(verifyTimer);
+        verifyTimer = null;
+      }
+      document.getElementById('goSpaceLabel').textContent = user ? 'Mon espace' : 'Inscription';
+      if (user) {
+        document.getElementById('teacherName').textContent = [user.name, user.city].filter(Boolean).join(' · ');
+        document.getElementById('teacherLogin').textContent = user.email || '';
+      }
+      renderMyStats();
+    }
+
+    sessionForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!appState.user) {
+        showToast("🔒 Connexion requise", "Connectez-vous pour enregistrer une séance.");
+        return;
+      }
+      if (!appState.user.emailVerified) {
+        showToast("✉️ Adresse à confirmer", "Confirmez votre adresse e-mail pour enregistrer des séances.");
+        return;
+      }
+      const current = computeCurrentSessionValues();
+      const session = {
+        date: new Date().toISOString().slice(0, 10),
+        activityId: current.activity.id,
+        activityName: current.activity.name,
+        students: current.students,
+        classes: current.classes,
+        weight: current.weight,
+        minutes: current.minutes,
+        intensity: current.intensity,
+        met: current.met,
+        calories: current.totalKcal,
+        burgers: current.burgers,
+        createdAtMs: Date.now()
+      };
+
+      btnAddSession.disabled = true;
+      try {
+        await store.addSession(session);
+        playSound('rocket');
+        triggerBurgerLaunchParticles(current.burgers);
+        showToast(
+          "🚀 Big Macs empilés !",
+          `+${formatNumberFr(current.burgers, 1)} burgers (+${formatNumberFr(current.totalKcal)} kcal)`
+        );
+      } catch (err) {
+        showToast("⚠️ Enregistrement impossible", friendlyError(err));
+      } finally {
+        btnAddSession.disabled = false;
+      }
+    });
+
+    // MODE TEST : simulations en mémoire, jamais enregistrées -------------
+    function addTestSessionFromCurrent(multiplier = 1) {
+      const current = computeCurrentSessionValues();
+      const burgers = current.burgers * multiplier;
+      appState.testSessions.push({ calories: current.totalKcal * multiplier, burgers });
+      updateDashboard();
+      triggerBurgerLaunchParticles(burgers);
+      playSound('rocket');
+      showToast('🧪 Simulation ajoutée', `Équivalent de ${multiplier} séance${multiplier > 1 ? 's' : ''} ajouté (non enregistré).`);
+    }
+
+    function jumpToTestHeight(targetHeight, label, icon) {
+      recalculateTotals();
+      const missingHeight = Math.max(0, targetHeight - appState.totalHeightMeters);
+      if (missingHeight <= 0) {
+        showToast(`${icon} Palier déjà atteint`, `${label} est déjà dépassé.`);
+        return;
+      }
+      const burgersNeeded = missingHeight / HEIGHT_PER_BIGMAC_METERS + 0.01;
+      appState.testSessions.push({ calories: burgersNeeded * CALORIES_PER_BIGMAC, burgers: burgersNeeded });
+      updateDashboard();
+      triggerBurgerLaunchParticles(Math.min(burgersNeeded, 50));
+      playSound('rocket');
+      showToast(`${icon} ${label} atteint !`, `${formatNumberFr(burgersNeeded, 0)} Big Macs simulés.`);
+    }
+
+    document.querySelectorAll('.test-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const action = btn.dataset.testAction;
+        if (action === 'one') addTestSessionFromCurrent(1);
+        if (action === 'ten') addTestSessionFromCurrent(10);
+      });
+    });
+
+    let toastTimeout;
+    function showToast(title, msg, icon = "🍔") {
+      const toast = document.getElementById('toast');
+      document.getElementById('toastTitle').textContent = title;
+      document.getElementById('toastMsg').textContent = msg;
+      document.getElementById('toastIcon').textContent = icon;
+
+      toast.classList.remove('opacity-0', 'translate-y-20');
+      toast.classList.add('opacity-100', 'translate-y-0');
+
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.classList.remove('opacity-100', 'translate-y-0');
+        toast.classList.add('opacity-0', 'translate-y-20');
+      }, 3500);
+    }
+
+    const canvas = document.getElementById('spaceCanvas');
+    const ctx = canvas.getContext('2d');
+
+    let canvasWidth = 0;
+    let canvasHeight = 0;
+    let particles = [];
+    function resizeCanvas() {
+      const rect = canvas.parentElement.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvasWidth = rect.width;
+      canvasHeight = rect.height;
+      canvas.width = canvasWidth * dpr;
+      canvas.height = canvasHeight * dpr;
+      ctx.scale(dpr, dpr);
+    }
+
+    window.addEventListener('resize', () => {
+      resizeCanvas();
+      requestRedraw();
+    });
+
+    // Caméra dynamique : gros plan au départ, puis dézoom progressif avec la tour.
+    let cameraMaxAltitude = 12; // Au départ, l'écran représente environ les 12 premiers mètres.
+
+    function getTargetCameraMaxAltitude() {
+      const h = Math.max(0, appState.totalHeightMeters);
+      // Le champ englobe la tour (avec de la marge) et le prochain palier ; l'objectif lointain reste signalé par la flèche du haut.
+      const { next } = getCurrentMilestoneInfo(h);
+      const nextH = next ? next.height * 1.2 : h * 1.45;
+      const minView = appState.view === 'class' ? 3 : 12; // 3 m pour voir un élève de 1,40 m et le professeur
+      return Math.max(minView, h * 1.45, nextH);
+    }
+
+    function updateCameraZoom() {
+      const target = getTargetCameraMaxAltitude();
+      // Interpolation douce : la caméra accompagne la progression au lieu de sauter d'une échelle à l'autre.
+      cameraMaxAltitude += (target - cameraMaxAltitude) * 0.045;
+      if (Math.abs(target - cameraMaxAltitude) < 0.01) cameraMaxAltitude = target;
+    }
+
+    function heightToCanvasY(altMeters) {
+      const groundY = canvasHeight - 70; // même sol que la tour et les monuments
+      const topY = 56;
+      const availableH = groundY - topY;
+      if (altMeters <= 0) return groundY;
+
+      // Échelle LINÉAIRE dans le champ courant : la tour, le palier franchi et le suivant
+      // gardent leurs vraies proportions (le zoom s'adapte à chaque étape).
+      const visibleMax = Math.max(1, cameraMaxAltitude);
+      const clamped = Math.min(altMeters, visibleMax);
+      return groundY - (clamped / visibleMax) * availableH;
+    }
+
+    function drawGround(groundY) {
+      const grass = ctx.createLinearGradient(0, groundY, 0, canvasHeight - 22);
+      grass.addColorStop(0, '#22c55e');
+      grass.addColorStop(1, '#14532d');
+      ctx.fillStyle = grass;
+      ctx.fillRect(0, groundY, canvasWidth, canvasHeight - 22 - groundY);
+
+      ctx.fillStyle = '#b91c1c';
+      ctx.fillRect(0, canvasHeight - 22, canvasWidth, 22);
+
+      ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, canvasHeight - 11);
+      ctx.lineTo(canvasWidth, canvasHeight - 11);
+      ctx.stroke();
+
+      ctx.fillStyle = '#f8fafc';
+      ctx.font = '10px sans-serif';
+      ctx.fillText('🏃 Terrain EPS & Piste', 12, canvasHeight - 6);
+    }
+
+    function drawVectorBigMac(x, y, scale = 1, showGlow = false) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(scale, scale);
+
+      if (showGlow) {
+        ctx.shadowColor = '#f59e0b';
+        ctx.shadowBlur = 15;
+      }
+
+      const w = 36;
+      const hw = w / 2;
+
+      // 1. Pain du bas
+      ctx.fillStyle = '#d97706';
+      ctx.beginPath();
+      ctx.roundRect(-hw, 8, w, 5, [2, 2, 4, 4]);
+      ctx.fill();
+
+      // 2. Steak inférieur
+      ctx.fillStyle = '#78350f';
+      ctx.beginPath();
+      ctx.roundRect(-hw + 1, 4, w - 2, 4, 2);
+      ctx.fill();
+
+      // 3. Salade & Fromage
+      ctx.fillStyle = '#22c55e';
+      ctx.fillRect(-hw, 2, w, 2.5);
+      ctx.fillStyle = '#facc15';
+      ctx.beginPath();
+      ctx.moveTo(-hw + 3, 3);
+      ctx.lineTo(-hw + 10, 6);
+      ctx.lineTo(-hw + 16, 3);
+      ctx.fill();
+
+      // 4. Pain club central
+      ctx.fillStyle = '#d97706';
+      ctx.fillRect(-hw + 1, -1, w - 2, 3);
+
+      // 5. Steak supérieur
+      ctx.fillStyle = '#78350f';
+      ctx.beginPath();
+      ctx.roundRect(-hw + 1, -5, w - 2, 4, 2);
+      ctx.fill();
+
+      // 6. Salade haute
+      ctx.fillStyle = '#22c55e';
+      ctx.fillRect(-hw, -7, w, 2);
+
+      // 7. Bun supérieur
+      ctx.fillStyle = '#b45309';
+      ctx.beginPath();
+      ctx.ellipse(0, -10, hw, 7, 0, Math.PI, 0);
+      ctx.fill();
+
+      ctx.fillStyle = '#fef3c7';
+      const sesames = [
+        [-8, -13], [-2, -15], [5, -13], [-11, -10], [0, -11], [9, -10]
+      ];
+      sesames.forEach(([sx, sy]) => {
+        ctx.fillRect(sx, sy, 1.5, 1);
+      });
+
+      ctx.restore();
+    }
+
+
+    // Modélisation visuelle des objectifs : silhouettes comparatives qui apparaissent avec le dézoom.
+    // Les étiquettes sont mises en file puis dessinées APRÈS la tour pour ne jamais être masquées par elle.
+    let pendingLabels = [];
+    function drawObjectLabel(x, y, text, reached) {
+      pendingLabels.push({ x, y, text, reached });
+    }
+    function flushObjectLabels() {
+      pendingLabels.forEach(l => paintObjectLabel(l.x, l.y, l.text, l.reached));
+      pendingLabels = [];
+    }
+    function paintObjectLabel(x, y, text, reached) {
+      ctx.save();
+      ctx.font = 'bold 10px sans-serif';
+      const pad = 6;
+      const tw = ctx.measureText(text).width;
+      const boxX = Math.max(6, Math.min(canvasWidth - tw - pad * 2 - 62, x - tw / 2 - pad));
+      const boxY = Math.max(6, y - 24);
+      ctx.fillStyle = reached ? 'rgba(120,53,15,0.88)' : 'rgba(15,23,42,0.82)';
+      ctx.strokeStyle = reached ? '#f59e0b' : '#475569';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(boxX, boxY, tw + pad * 2, 18, 6);
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle = reached ? '#fef3c7' : '#cbd5e1';
+      ctx.fillText(text, boxX + pad, boxY + 12);
+      ctx.restore();
+    }
+
+    function drawCollege(x, groundY, topY, reached) {
+      const h = Math.max(6, groundY - topY);
+      const w = Math.min(canvasWidth * 0.36, h * 3.2); // ~ bâtiment 3 fois plus large que haut
+      ctx.save();
+      ctx.globalAlpha = reached ? 0.95 : 0.48;
+      ctx.fillStyle = reached ? '#c2410c' : '#475569';
+      ctx.fillRect(x - w/2, groundY - h * 0.72, w, h * 0.72);
+      ctx.fillStyle = reached ? '#fb923c' : '#64748b';
+      ctx.beginPath();
+      ctx.moveTo(x - w/2 - 5, groundY - h * 0.72);
+      ctx.lineTo(x, groundY - h);
+      ctx.lineTo(x + w/2 + 5, groundY - h * 0.72);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#bae6fd';
+      const rows=2, cols=4;
+      for(let r=0;r<rows;r++) for(let c=0;c<cols;c++) {
+        ctx.fillRect(x-w*0.38+c*w*0.22, groundY-h*0.60+r*h*0.22, w*0.11, Math.max(4,h*0.10));
+      }
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(x-7, groundY-Math.max(14,h*0.28), 14, Math.max(14,h*0.28));
+      ctx.restore();
+      drawObjectLabel(x, groundY-h-4, 'Collège / Lycée · 10 m', reached);
+    }
+
+    function drawStatueOfLiberty(x, groundY, topY, reached) {
+      const h = Math.max(6, groundY - topY);
+      const u = Math.min(h / 100, canvasWidth * 0.36 / 26); // unité : 1 % de la hauteur totale (torche incluse), plafonnée pour rester étroite
+      ctx.save();
+      ctx.globalAlpha = reached ? 0.95 : 0.5;
+      const stone = reached ? '#94a3b8' : '#475569';
+      const copper = reached ? '#2dd4bf' : '#64748b';
+
+      // Piédestal (≈ 45 % de la hauteur) puis socle étoilé
+      ctx.fillStyle = stone;
+      ctx.fillRect(x - 13 * u, groundY - 12 * u, 26 * u, 12 * u);
+      ctx.fillRect(x - 9 * u, groundY - 44 * u, 18 * u, 32 * u);
+
+      // Robe
+      ctx.fillStyle = copper;
+      ctx.beginPath();
+      ctx.moveTo(x - 7 * u, groundY - 44 * u);
+      ctx.lineTo(x - 5 * u, groundY - 78 * u);
+      ctx.lineTo(x + 5 * u, groundY - 78 * u);
+      ctx.lineTo(x + 7 * u, groundY - 44 * u);
+      ctx.closePath();
+      ctx.fill();
+
+      // Tête et couronne à pointes
+      ctx.beginPath();
+      ctx.arc(x, groundY - 82 * u, 4 * u, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = copper;
+      ctx.lineWidth = Math.max(1, u * 0.8);
+      ctx.beginPath();
+      for (let i = -2; i <= 2; i++) {
+        ctx.moveTo(x + i * 1.6 * u, groundY - 85 * u);
+        ctx.lineTo(x + i * 3.6 * u, groundY - 91 * u);
+      }
+      ctx.stroke();
+
+      // Bras levé + torche
+      ctx.lineWidth = Math.max(2, u * 2.4);
+      ctx.beginPath();
+      ctx.moveTo(x + 4 * u, groundY - 76 * u);
+      ctx.lineTo(x + 11 * u, groundY - 90 * u);
+      ctx.lineTo(x + 11 * u, groundY - 97 * u);
+      ctx.stroke();
+      ctx.fillStyle = reached ? '#fbbf24' : '#64748b';
+      ctx.beginPath();
+      ctx.ellipse(x + 11 * u, groundY - 100 * u, 2.4 * u, 3.6 * u, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Tablette
+      ctx.fillStyle = copper;
+      ctx.fillRect(x - 10 * u, groundY - 66 * u, 5 * u, 8 * u);
+      ctx.restore();
+      drawObjectLabel(x, groundY - 100 * u - 4, 'Statue de la Liberté · 93 m', reached);
+    }
+
+    function drawEiffelTower(x, groundY, topY, reached) {
+      const h = Math.max(6, groundY - topY);
+      const w = Math.min(canvasWidth * 0.36, h * 0.38); // base ≈ 38 % de la hauteur
+      ctx.save();
+      ctx.globalAlpha = reached ? 0.95 : 0.5;
+      ctx.strokeStyle = reached ? '#f59e0b' : '#64748b';
+      ctx.lineWidth = Math.max(1.5, Math.min(4, h/90));
+      ctx.beginPath();
+      ctx.moveTo(x, topY); ctx.lineTo(x-w/2, groundY);
+      ctx.moveTo(x, topY); ctx.lineTo(x+w/2, groundY);
+      ctx.moveTo(x-w*0.38, groundY-h*0.18); ctx.lineTo(x+w*0.38, groundY-h*0.18);
+      ctx.moveTo(x-w*0.25, groundY-h*0.46); ctx.lineTo(x+w*0.25, groundY-h*0.46);
+      ctx.moveTo(x-w*0.12, groundY-h*0.73); ctx.lineTo(x+w*0.12, groundY-h*0.73);
+      for(let i=1;i<6;i++) {
+        const yy=topY+h*i/6, frac=i/6, half=w*frac/2;
+        ctx.moveTo(x-half,yy); ctx.lineTo(x+half,yy);
+      }
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(x, groundY, w*0.22, Math.PI, 0); ctx.stroke();
+      ctx.restore();
+      drawObjectLabel(x, topY-4, 'Tour Eiffel · 330 m', reached);
+    }
+
+    function drawPisa(x, groundY, topY, reached) {
+      const h = Math.max(6, groundY - topY);
+      const w = Math.min(canvasWidth * 0.2, h * 0.27);
+      const lean = -0.07; // ≈ 4° d'inclinaison
+      ctx.save();
+      ctx.globalAlpha = reached ? 0.96 : 0.55;
+      ctx.translate(x, groundY);
+      ctx.transform(1, 0, lean, 1, 0, 0);
+      const levels = 8;
+      const lh = h / levels;
+      for (let i = 0; i < levels; i++) {
+        const y = -(i + 1) * lh;
+        const topLevel = i === levels - 1;
+        const lw = topLevel ? w * 0.72 : w;
+        ctx.fillStyle = reached ? (i % 2 ? '#f1f5f9' : '#e2e8f0') : '#64748b';
+        ctx.fillRect(-lw / 2, y, lw, lh * 0.96);
+        // arcades
+        ctx.fillStyle = reached ? '#475569' : '#334155';
+        const arches = 5;
+        for (let a = 0; a < arches; a++) {
+          const ax = -lw / 2 + lw * (a + 0.35) / arches;
+          ctx.fillRect(ax, y + lh * 0.25, lw / arches * 0.3, lh * 0.55);
+        }
+      }
+      ctx.restore();
+      drawObjectLabel(x, topY - 4, 'Tour de Pise · 56 m', reached);
+    }
+
+    function drawPyramid(x, groundY, topY, reached) {
+      const h = Math.max(6, groundY - topY);
+      const w = Math.min(canvasWidth * 0.4, h * 1.65);
+      ctx.save();
+      ctx.globalAlpha = reached ? 0.96 : 0.55;
+      const g = ctx.createLinearGradient(x - w / 2, 0, x + w / 2, 0);
+      g.addColorStop(0, reached ? '#f6d58c' : '#64748b');
+      g.addColorStop(0.5, reached ? '#e0b152' : '#556275');
+      g.addColorStop(1, reached ? '#b8862f' : '#475569');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(x, topY);
+      ctx.lineTo(x + w / 2, groundY);
+      ctx.lineTo(x - w / 2, groundY);
+      ctx.closePath();
+      ctx.fill();
+      // assises de pierre
+      ctx.strokeStyle = 'rgba(120, 80, 20, 0.35)';
+      ctx.lineWidth = 1;
+      const rows = Math.max(4, Math.min(14, Math.round(h / 8)));
+      for (let r = 1; r < rows; r++) {
+        const yy = topY + (h * r) / rows;
+        const half = (w / 2) * (r / rows);
+        ctx.beginPath();
+        ctx.moveTo(x - half, yy);
+        ctx.lineTo(x + half, yy);
+        ctx.stroke();
+      }
+      ctx.restore();
+      drawObjectLabel(x, topY - 4, 'Pyramide de Khéops · 139 m', reached);
+    }
+
+    function drawMontparnasse(x, groundY, topY, reached) {
+      const h = Math.max(6, groundY - topY);
+      const w = Math.min(canvasWidth * 0.2, h * 0.2);
+      ctx.save();
+      ctx.globalAlpha = reached ? 0.96 : 0.55;
+      const g = ctx.createLinearGradient(x - w / 2, 0, x + w / 2, 0);
+      g.addColorStop(0, reached ? '#1f2937' : '#475569');
+      g.addColorStop(1, reached ? '#4b5563' : '#64748b');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.roundRect(x - w / 2, topY, w, h, 2);
+      ctx.fill();
+      ctx.strokeStyle = reached ? 'rgba(186, 230, 253, 0.45)' : 'rgba(148, 163, 184, 0.3)';
+      ctx.lineWidth = 1;
+      const floors = Math.max(6, Math.min(40, Math.round(h / 5)));
+      for (let f = 1; f < floors; f++) {
+        const yy = topY + (h * f) / floors;
+        ctx.beginPath();
+        ctx.moveTo(x - w / 2, yy);
+        ctx.lineTo(x + w / 2, yy);
+        ctx.stroke();
+      }
+      ctx.restore();
+      drawObjectLabel(x, topY - 4, 'Tour Montparnasse · 210 m', reached);
+    }
+
+    function drawEmpireState(x, groundY, topY, reached) {
+      const h = Math.max(6, groundY - topY);
+      const w = Math.min(canvasWidth * 0.3, h * 0.29);
+      ctx.save();
+      ctx.globalAlpha = reached ? 0.96 : 0.55;
+      ctx.fillStyle = reached ? '#cbd5e1' : '#64748b';
+      // gradins successifs (fraction de hauteur, fraction de largeur)
+      const tiers = [[0.00, 0.18, 1.00], [0.18, 0.50, 0.74], [0.50, 0.68, 0.50], [0.68, 0.80, 0.30], [0.80, 0.88, 0.17]];
+      tiers.forEach(([from, to, wf]) => {
+        const tw = w * wf;
+        ctx.fillRect(x - tw / 2, groundY - h * to, tw, h * (to - from));
+      });
+      // flèche / antenne
+      ctx.strokeStyle = reached ? '#e2e8f0' : '#64748b';
+      ctx.lineWidth = Math.max(1.5, h * 0.012);
+      ctx.beginPath();
+      ctx.moveTo(x, groundY - h * 0.88);
+      ctx.lineTo(x, topY);
+      ctx.stroke();
+      // fenêtres
+      ctx.fillStyle = reached ? 'rgba(250, 204, 21, 0.6)' : 'rgba(148, 163, 184, 0.35)';
+      for (let r = 0; r < 12; r++) {
+        const yy = groundY - h * (0.03 + r * 0.045);
+        ctx.fillRect(x - w * 0.4, yy, w * 0.8, 1.2);
+      }
+      ctx.restore();
+      drawObjectLabel(x, topY - 4, 'Empire State Building · 443 m', reached);
+    }
+
+    function drawBurj(x, groundY, topY, reached) {
+      const h=Math.max(6,groundY-topY), w=Math.min(canvasWidth*0.3,Math.max(10,h*0.12));
+      ctx.save(); ctx.globalAlpha=reached?.92:.45;
+      const g=ctx.createLinearGradient(x,topY,x,groundY);
+      g.addColorStop(0,reached?'#e0f2fe':'#64748b'); g.addColorStop(1,reached?'#0ea5e9':'#334155');
+      ctx.fillStyle=g;
+      ctx.beginPath(); ctx.moveTo(x,topY); ctx.lineTo(x+w*.10,topY+h*.18); ctx.lineTo(x+w*.23,topY+h*.18);
+      ctx.lineTo(x+w*.28,topY+h*.38); ctx.lineTo(x+w*.40,topY+h*.38); ctx.lineTo(x+w*.46,groundY);
+      ctx.lineTo(x-w*.46,groundY); ctx.lineTo(x-w*.38,topY+h*.58); ctx.lineTo(x-w*.27,topY+h*.58);
+      ctx.lineTo(x-w*.20,topY+h*.33); ctx.lineTo(x-w*.10,topY+h*.33); ctx.closePath(); ctx.fill();
+      ctx.restore(); drawObjectLabel(x,topY-4,'Burj Khalifa · 828 m',reached);
+    }
+
+    function drawMountain(x, groundY, topY, label, reached) {
+      const h=Math.max(6,groundY-topY), w=Math.min(canvasWidth*0.4,h*1.6);
+      ctx.save(); ctx.globalAlpha=reached?.92:.42;
+      const g=ctx.createLinearGradient(0,topY,0,groundY);
+      g.addColorStop(0,'#f8fafc'); g.addColorStop(.28,reached?'#cbd5e1':'#64748b'); g.addColorStop(1,reached?'#475569':'#334155');
+      ctx.fillStyle=g; ctx.beginPath(); ctx.moveTo(x-w/2,groundY); ctx.lineTo(x-w*.20,topY+h*.48); ctx.lineTo(x,topY);
+      ctx.lineTo(x+w*.13,topY+h*.30); ctx.lineTo(x+w*.28,topY+h*.52); ctx.lineTo(x+w/2,groundY); ctx.closePath(); ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,.88)'; ctx.beginPath(); ctx.moveTo(x,topY); ctx.lineTo(x-w*.10,topY+h*.20); ctx.lineTo(x-w*.02,topY+h*.16); ctx.lineTo(x+w*.08,topY+h*.23); ctx.lineTo(x+w*.13,topY+h*.30); ctx.closePath(); ctx.fill();
+      ctx.restore(); drawObjectLabel(x,topY-4,label,reached);
+    }
+
+
+
+
+
+
+    function drawPerson(x, groundY, topY, reached, o) {
+      const h = Math.max(6, groundY - topY);
+      const headR = h * 0.075;
+      const bodyTop = topY + headR * 2 + h * 0.01;
+      const hipY = groundY - h * 0.46;
+      ctx.save();
+      ctx.globalAlpha = reached ? 0.97 : 0.55;
+      ctx.lineCap = 'round';
+      // jambes
+      ctx.strokeStyle = reached ? o.trousers : '#475569';
+      ctx.lineWidth = Math.max(2, h * 0.075);
+      ctx.beginPath();
+      ctx.moveTo(x - h * 0.05, hipY); ctx.lineTo(x - h * 0.07, groundY - 2);
+      ctx.moveTo(x + h * 0.05, hipY); ctx.lineTo(x + h * 0.07, groundY - 2);
+      ctx.stroke();
+      // torse et bras
+      ctx.fillStyle = reached ? o.shirt : '#64748b';
+      ctx.beginPath();
+      ctx.roundRect(x - h * 0.13, bodyTop, h * 0.26, hipY - bodyTop + 2, h * 0.05);
+      ctx.fill();
+      ctx.strokeStyle = reached ? o.shirt : '#64748b';
+      ctx.lineWidth = Math.max(2, h * 0.055);
+      ctx.beginPath();
+      ctx.moveTo(x - h * 0.13, bodyTop + h * 0.04); ctx.lineTo(x - h * 0.2, hipY - h * 0.02);
+      ctx.moveTo(x + h * 0.13, bodyTop + h * 0.04); ctx.lineTo(x + h * 0.2, hipY - h * 0.02);
+      ctx.stroke();
+      // tête et cheveux
+      ctx.fillStyle = reached ? '#f5c9a0' : '#94a3b8';
+      ctx.beginPath(); ctx.arc(x, topY + headR, headR, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = reached ? o.hair : '#475569';
+      ctx.beginPath(); ctx.arc(x, topY + headR, headR, Math.PI, 0); ctx.fill();
+      if (o.tie) { // cravate du professeur
+        ctx.fillStyle = reached ? '#dc2626' : '#64748b';
+        ctx.beginPath();
+        ctx.moveTo(x, bodyTop + h * 0.01); ctx.lineTo(x + h * 0.03, bodyTop + h * 0.12); ctx.lineTo(x, bodyTop + h * 0.16); ctx.lineTo(x - h * 0.03, bodyTop + h * 0.12);
+        ctx.closePath(); ctx.fill();
+      }
+      if (o.book) { // livre sous le bras
+        ctx.fillStyle = reached ? '#b45309' : '#64748b';
+        ctx.fillRect(x + h * 0.17, hipY - h * 0.12, h * 0.1, h * 0.14);
+      }
+      ctx.restore();
+      drawObjectLabel(x, topY - 4, o.label, reached);
+    }
+
+    function drawTree(x, groundY, topY, reached) {
+      const h = Math.max(6, groundY - topY);
+      const crownR = h * 0.3;
+      ctx.save();
+      ctx.globalAlpha = reached ? 0.97 : 0.55;
+      ctx.fillStyle = reached ? '#7c4a1e' : '#475569';
+      const crownBottom = topY + crownR * 1.5;
+      ctx.fillRect(x - h * 0.05, crownBottom - h * 0.05, h * 0.1, groundY - crownBottom + h * 0.05);
+      ctx.fillStyle = reached ? '#15803d' : '#64748b';
+      ctx.beginPath(); ctx.arc(x, topY + crownR, crownR, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = reached ? '#16a34a' : '#6b7a8f';
+      ctx.beginPath(); ctx.arc(x - crownR * 0.55, topY + crownR * 1.25, crownR * 0.7, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x + crownR * 0.55, topY + crownR * 1.25, crownR * 0.7, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      drawObjectLabel(x, topY - 4, 'Arbre · 8 m', reached);
+    }
+
+    function drawSchool(x, groundY, topY, reached) {
+      const h = Math.max(6, groundY - topY);
+      const w = Math.min(canvasWidth * 0.36, h * 2.2);
+      const wallTop = groundY - h * 0.7;
+      ctx.save();
+      ctx.globalAlpha = reached ? 0.96 : 0.55;
+      ctx.fillStyle = reached ? '#fcd9a8' : '#64748b';
+      ctx.fillRect(x - w / 2, wallTop, w, groundY - wallTop);
+      ctx.fillStyle = reached ? '#b91c1c' : '#475569';
+      ctx.beginPath();
+      ctx.moveTo(x - w / 2 - 4, wallTop); ctx.lineTo(x, topY + h * 0.2); ctx.lineTo(x + w / 2 + 4, wallTop);
+      ctx.closePath(); ctx.fill();
+      // fenêtres, porte
+      ctx.fillStyle = reached ? '#bae6fd' : '#94a3b8';
+      const cols = 5;
+      for (let c = 0; c < cols; c++) {
+        if (c === 2) continue;
+        const wx = x - w / 2 + w * (c + 0.25) / cols;
+        ctx.fillRect(wx, wallTop + h * 0.1, w / cols * 0.5, h * 0.17);
+        ctx.fillRect(wx, wallTop + h * 0.38, w / cols * 0.5, h * 0.12);
+      }
+      ctx.fillStyle = reached ? '#78350f' : '#475569';
+      ctx.fillRect(x - w * 0.06, groundY - h * 0.22, w * 0.12, h * 0.22);
+      // mât et drapeau
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(x, topY + h * 0.2); ctx.lineTo(x, topY); ctx.stroke();
+      ctx.fillStyle = reached ? '#2563eb' : '#94a3b8';
+      ctx.fillRect(x, topY, h * 0.12, h * 0.07);
+      ctx.restore();
+      drawObjectLabel(x, topY - 4, 'École · 12 m', reached);
+    }
+
+    function drawWaterTower(x, groundY, topY, reached) {
+      const h = Math.max(6, groundY - topY);
+      const tankW = Math.min(canvasWidth * 0.3, h * 0.4);
+      const tankH = h * 0.32;
+      const tankTop = topY + h * 0.08;
+      ctx.save();
+      ctx.globalAlpha = reached ? 0.97 : 0.55;
+      // pieds et croisillons
+      ctx.strokeStyle = reached ? '#94a3b8' : '#64748b';
+      ctx.lineWidth = Math.max(2, h * 0.025);
+      const legTop = tankTop + tankH;
+      ctx.beginPath();
+      ctx.moveTo(x - tankW * 0.45, legTop); ctx.lineTo(x - tankW * 0.62, groundY);
+      ctx.moveTo(x + tankW * 0.45, legTop); ctx.lineTo(x + tankW * 0.62, groundY);
+      ctx.moveTo(x - tankW * 0.15, legTop); ctx.lineTo(x - tankW * 0.2, groundY);
+      ctx.moveTo(x + tankW * 0.15, legTop); ctx.lineTo(x + tankW * 0.2, groundY);
+      ctx.stroke();
+      ctx.lineWidth = Math.max(1, h * 0.012);
+      for (let i = 1; i <= 3; i++) {
+        const yy = legTop + (groundY - legTop) * i / 4;
+        const hw = tankW * (0.45 + 0.17 * i / 4);
+        ctx.beginPath(); ctx.moveTo(x - hw, yy); ctx.lineTo(x + hw, yy); ctx.stroke();
+      }
+      // cuve et toit conique
+      ctx.fillStyle = reached ? '#cbd5e1' : '#64748b';
+      ctx.beginPath(); ctx.roundRect(x - tankW / 2, tankTop, tankW, tankH, tankW * 0.12); ctx.fill();
+      ctx.fillStyle = reached ? '#38bdf8' : '#7b8aa0';
+      ctx.fillRect(x - tankW / 2, tankTop + tankH * 0.45, tankW, tankH * 0.12);
+      ctx.fillStyle = reached ? '#64748b' : '#475569';
+      ctx.beginPath();
+      ctx.moveTo(x - tankW * 0.56, tankTop); ctx.lineTo(x, topY); ctx.lineTo(x + tankW * 0.56, tankTop);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+      drawObjectLabel(x, topY - 4, "Château d'eau · 40 m", reached);
+    }
+
+    function drawClassObjects() {
+      const groundY = canvasHeight - 70;
+      const { current, next } = getCurrentMilestoneInfo(appState.totalHeightMeters);
+      const leftX = Math.max(60, canvasWidth * 0.22);
+      const rightX = Math.min(canvasWidth - 60, canvasWidth * 0.78);
+      const visible = h => (h === current.height || (next && h === next.height)) && h <= cameraMaxAltitude * 1.08;
+      const reached = h => appState.totalHeightMeters >= h;
+      const X = h => (h === current.height ? leftX : rightX);
+      const Y = h => heightToCanvasY(h);
+      const items = [
+        [1.4, () => drawPerson(X(1.4), groundY, Y(1.4), reached(1.4), { shirt: '#3b82f6', trousers: '#1e3a8a', hair: '#78350f', label: 'Élève de CM1 · 1,40 m' })],
+        [1.75, () => drawPerson(X(1.75), groundY, Y(1.75), reached(1.75), { shirt: '#f1f5f9', trousers: '#334155', hair: '#374151', tie: true, book: true, label: 'Professeur · 1,75 m' })],
+        [8, () => drawTree(X(8), groundY, Y(8), reached(8))],
+        [12, () => drawSchool(X(12), groundY, Y(12), reached(12))],
+        [40, () => drawWaterTower(X(40), groundY, Y(40), reached(40))]
+      ];
+      items.forEach(([h, draw]) => { if (visible(h)) draw(); });
+    }
+
+    function drawMilestoneObjects() {
+      if (appState.view === 'class') { drawClassObjects(); return; }
+      const groundY = canvasHeight - 70;
+      // Seuls deux repères sont affichés : le dernier palier franchi (à gauche) et le suivant (à droite),
+      // de part et d'autre de la tour centrale.
+      const { current, next } = getCurrentMilestoneInfo(appState.totalHeightMeters);
+      const leftX = Math.max(60, canvasWidth * 0.22);
+      const rightX = Math.min(canvasWidth - 60, canvasWidth * 0.78);
+      const visible = h => (h === current.height || (next && h === next.height)) && h <= cameraMaxAltitude * 1.08;
+      const reached = h => appState.totalHeightMeters >= h;
+      const X = h => (h === current.height ? leftX : rightX);
+
+      if (visible(10)) drawCollege(X(10), groundY, heightToCanvasY(10), reached(10));
+      if (visible(56)) drawPisa(X(56), groundY, heightToCanvasY(56), reached(56));
+      if (visible(93)) drawStatueOfLiberty(X(93), groundY, heightToCanvasY(93), reached(93));
+      if (visible(139)) drawPyramid(X(139), groundY, heightToCanvasY(139), reached(139));
+      if (visible(210)) drawMontparnasse(X(210), groundY, heightToCanvasY(210), reached(210));
+      if (visible(330)) drawEiffelTower(X(330), groundY, heightToCanvasY(330), reached(330));
+      if (visible(443)) drawEmpireState(X(443), groundY, heightToCanvasY(443), reached(443));
+      if (visible(828)) drawBurj(X(828), groundY, heightToCanvasY(828), reached(828));
+      if (visible(1912)) drawMountain(X(1912), groundY, heightToCanvasY(1912), 'Mont Ventoux · 1 912 m', reached(1912));
+      if (visible(4809)) drawMountain(X(4809), groundY, heightToCanvasY(4809), 'Mont Blanc · 4 809 m', reached(4809));
+      if (visible(5895)) drawMountain(X(5895), groundY, heightToCanvasY(5895), 'Kilimandjaro · 5 895 m', reached(5895));
+      if (visible(8849)) {
+        const topY = heightToCanvasY(8849);
+        drawMountain(X(8849), groundY, topY, 'Everest · 8 849 m', reached(8849));
+        // drapeau au sommet
+        ctx.save();
+        ctx.strokeStyle = '#f8fafc';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(X(8849), topY);
+        ctx.lineTo(X(8849), topY - 22);
+        ctx.stroke();
+        ctx.fillStyle = reached(8849) ? '#ef4444' : '#94a3b8';
+        ctx.beginPath();
+        ctx.moveTo(X(8849), topY - 22);
+        ctx.lineTo(X(8849) + 16, topY - 17);
+        ctx.lineTo(X(8849), topY - 12);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    function drawMilestoneMarkers() {
+      const { current, next } = getCurrentMilestoneInfo(appState.totalHeightMeters);
+      activeMilestones().forEach((m) => {
+        if (m.height !== current.height && !(next && m.height === next.height)) return;
+        if (m.height === 0 || m.height > cameraMaxAltitude * 1.05) return;
+        const y = heightToCanvasY(m.height);
+        const reached = appState.totalHeightMeters >= m.height;
+        ctx.save();
+        ctx.strokeStyle = reached ? 'rgba(250, 204, 21, 0.6)' : 'rgba(255, 255, 255, 0.4)';
+        ctx.setLineDash([3, 4]);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(14, y);
+        ctx.lineTo(canvasWidth - 60, y);
+        ctx.stroke();
+        ctx.restore();
+      });
+    }
+
+    function formatAltitude(m) {
+      if (m >= 1000) return `${formatNumberFr(m / 1000, m % 1000 === 0 ? 0 : 1)} km`;
+      return `${formatNumberFr(m, m < 10 && m % 1 !== 0 ? 2 : 0)} m`;
+    }
+
+    // Règle d'échelle linéaire sur le bord droit, graduations "rondes" (1-2-5 × 10^n).
+    function drawScaleRuler(groundY) {
+      ctx.save();
+      ctx.font = '9px sans-serif';
+      ctx.textAlign = 'right';
+      const x = canvasWidth - 8;
+      const rough = cameraMaxAltitude / 5;
+      const pow = Math.pow(10, Math.floor(Math.log10(rough)));
+      const step = [1, 2, 5, 10].map(k => k * pow).find(v => v >= rough);
+      for (let m = step; m <= cameraMaxAltitude; m += step) {
+        const y = heightToCanvasY(m);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x - 6, y);
+        ctx.lineTo(x, y);
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+        ctx.fillText(formatAltitude(m), x - 9, y + 3);
+      }
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+      ctx.fillText('échelle linéaire · zoom adaptatif', x, groundY + 52);
+      ctx.restore();
+    }
+
+    // Objectif final (Everest) : ligne dorée avec les Big Macs restants, ou flèche si hors champ.
+    function drawGoalTarget() {
+      const goal = getGoal();
+      const reached = appState.totalHeightMeters >= goal.height;
+      const remainingBurgers = Math.max(0, Math.ceil((goal.height - appState.totalHeightMeters) / HEIGHT_PER_BIGMAC_METERS));
+      const text = reached
+        ? `✔ Objectif atteint : ${goal.label}`
+        : `🎯 ${goal.label} · encore ${formatNumberFr(remainingBurgers)} 🍔`;
+
+      ctx.save();
+      ctx.font = 'bold 11px sans-serif';
+      const tw = ctx.measureText(text).width;
+      const inView = goal.height <= cameraMaxAltitude * 1.02;
+      const y = inView ? heightToCanvasY(goal.height) : 24;
+      const color = reached ? '#4ade80' : '#facc15';
+
+      if (inView) {
+        ctx.strokeStyle = color;
+        ctx.globalAlpha = 0.9;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([10, 5]);
+        ctx.beginPath();
+        ctx.moveTo(14, y);
+        ctx.lineTo(canvasWidth - 60, y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+      }
+
+      const boxW = tw + 16;
+      // À gauche quand la ligne est visible (le palier suivant est étiqueté à droite), à droite pour la flèche du haut
+      const boxX = inView ? 14 : Math.max(8, canvasWidth - 70 - boxW);
+      const boxY = inView ? Math.max(4, y - 22) : y - 11;
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.roundRect(boxX, boxY, boxW, 20, 6);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = color;
+      ctx.fillText((inView ? '' : '↑ ') + text, boxX + 8, boxY + 14);
+      ctx.restore();
+    }
+
+    function triggerBurgerLaunchParticles(count) {
+      const num = Math.min(25, Math.max(8, Math.round(count / 2)));
+      const startX = canvasWidth / 2;
+      const startY = canvasHeight - 70;
+
+      for (let i = 0; i < num; i++) {
+        particles.push({
+          x: startX + (Math.random() * 40 - 20),
+          y: startY,
+          vx: (Math.random() - 0.5) * 5,
+          vy: -(Math.random() * 7 + 4),
+          rot: Math.random() * Math.PI,
+          vRot: (Math.random() - 0.5) * 0.15,
+          scale: Math.random() * 0.4 + 0.6,
+          life: 1.0,
+          decay: Math.random() * 0.015 + 0.01
+        });
+      }
+    }
+
+    // Rendu à la demande : en mode "mouvement réduit", on ne redessine que si quelque chose a changé.
+    const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let needsRedraw = true;
+    let rafId = null;
+
+    function requestRedraw() {
+      needsRedraw = true;
+      if (rafId === null && !document.hidden) rafId = requestAnimationFrame(animate);
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+      } else {
+        requestRedraw();
+      }
+    });
+    reducedMotionQuery.addEventListener('change', requestRedraw);
+
+    function animate() {
+      rafId = null;
+      if (document.hidden) return;
+
+      const reduced = reducedMotionQuery.matches;
+      const target = getTargetCameraMaxAltitude();
+      const cameraMoving = Math.abs(target - cameraMaxAltitude) > 0.01;
+      if (reduced && !needsRedraw && !cameraMoving && particles.length === 0) return; // plus rien à animer
+      needsRedraw = false;
+
+      updateCameraZoom();
+      ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+      // Ciel terrestre : bleu profond en haut, clair près de l'horizon
+      const skyGrad = ctx.createLinearGradient(0, 0, 0, canvasHeight);
+      skyGrad.addColorStop(0, '#0b2a52');
+      skyGrad.addColorStop(0.55, '#1e6fa8');
+      skyGrad.addColorStop(1, '#9bd8f5');
+      ctx.fillStyle = skyGrad;
+      ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+      const groundY = canvasHeight - 70;
+      drawGround(groundY);
+      drawMilestoneObjects();
+      drawMilestoneMarkers();
+      drawScaleRuler(groundY);
+
+      const centerX = canvasWidth / 2;
+      const totalBurgers = appState.totalBurgers;
+      const targetY = heightToCanvasY(appState.totalHeightMeters);
+
+      if (totalBurgers > 0) {
+        // Halo discret derrière la colonne
+        const beamGrad = ctx.createLinearGradient(centerX, groundY, centerX, targetY);
+        beamGrad.addColorStop(0, 'rgba(245, 158, 11, 0.05)');
+        beamGrad.addColorStop(1, 'rgba(254, 240, 138, 0.35)');
+        ctx.strokeStyle = beamGrad;
+        ctx.lineWidth = 34;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(centerX, groundY - 5);
+        ctx.lineTo(centerX, targetY);
+        ctx.stroke();
+
+        // Vraie pile de Big Macs, dessinée du bas vers le haut (chaque burger recouvre légèrement le précédent)
+        const BURGER_SPACING = 11;
+        const stackScale = 0.55;
+        const stackLen = groundY - 10 - targetY;
+        const stackCount = Math.max(1, Math.floor(stackLen / BURGER_SPACING));
+        for (let i = 0; i <= stackCount; i++) {
+          drawVectorBigMac(centerX, groundY - 10 - i * BURGER_SPACING, stackScale, false);
+        }
+
+        drawVectorBigMac(centerX, targetY, 1.0, true);
+
+        ctx.fillStyle = '#f97316';
+        ctx.beginPath();
+        ctx.moveTo(centerX - 8, targetY + 14);
+        ctx.lineTo(centerX + 8, targetY + 14);
+        ctx.lineTo(centerX, targetY + 28 + (reduced ? 4 : Math.random() * 8));
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 1.5;
+        const tagText = `${formatNumberFr(totalBurgers)} 🍔 (${formatNumberFr(appState.totalHeightMeters, 1)} m)`;
+        ctx.font = 'bold 11px sans-serif';
+        const tw = ctx.measureText(tagText).width;
+
+        ctx.beginPath();
+        // Étiquette à droite de la colonne, sous la ligne d'objectif, pour ne pas la masquer
+        const tagX = Math.min(centerX + 26, canvasWidth - tw - 24);
+        ctx.roundRect(tagX, targetY + 2, tw + 16, 22, 6);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#fef08a';
+        ctx.fillText(tagText, tagX + 8, targetY + 17);
+      } else {
+        drawVectorBigMac(centerX, groundY - 8, 1.0, false);
+      }
+
+      drawGoalTarget();
+      flushObjectLabels();
+
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.08;
+        p.rot += p.vRot;
+        p.life -= p.decay;
+
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot);
+        ctx.globalAlpha = Math.max(0, p.life);
+        drawVectorBigMac(0, 0, p.scale * 0.5, true);
+        ctx.restore();
+
+        if (p.life <= 0) {
+          particles.splice(i, 1);
+        }
+      }
+      ctx.globalAlpha = 1.0;
+
+      rafId = requestAnimationFrame(animate);
+    }
+
+    document.getElementById('todayDate').textContent = new Date().toLocaleDateString('fr-FR', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long'
+    });
+
+    activitySelect.addEventListener('change', updateActivityDetails);
+    studentCountInput.addEventListener('input', updatePreviewCalculations);
+    averageWeightInput.addEventListener('input', updatePreviewCalculations);
+    durationRange.addEventListener('input', updatePreviewCalculations);
+
+    btnSoundToggle.addEventListener('click', () => {
+      soundEnabled = !soundEnabled;
+      soundIcon.textContent = soundEnabled ? '🔊' : '🔇';
+      soundLabel.textContent = soundEnabled ? 'Audio' : 'Muet';
+      if (soundEnabled) {
+        initAudio();
+        playSound('pop');
+      }
+    });
+
+    classCountInput.addEventListener('input', updatePreviewCalculations);
+
+    if (TEST_MODE) testSection.classList.remove('hidden');
+
+    btnDeleteTestSessions.addEventListener('click', () => {
+      const n = appState.testSessions.length;
+      appState.testSessions = [];
+      updateDashboard();
+      showToast("🧪 Simulations supprimées", `${n} simulation(s) retirée(s).`);
+    });
+
+    // --- Inscription / connexion ---
+    function showAuthError(id, message) {
+      const box = document.getElementById(id);
+      box.textContent = message || '';
+      box.classList.toggle('hidden', !message);
+    }
+
+    function selectAuthTab(which) {
+      const reg = which === 'register';
+      registerForm.classList.toggle('hidden', !reg);
+      loginForm.classList.toggle('hidden', reg);
+      const on = ['bg-amber-500', 'text-slate-950'];
+      const off = ['text-slate-300', 'hover:bg-slate-700'];
+      tabRegister.classList.remove(...on, ...off);
+      tabLogin.classList.remove(...on, ...off);
+      tabRegister.classList.add(...(reg ? on : off));
+      tabLogin.classList.add(...(reg ? off : on));
+    }
+    tabRegister.addEventListener('click', () => selectAuthTab('register'));
+    tabLogin.addEventListener('click', () => selectAuthTab('login'));
+
+    registerForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      showAuthError('registerError', '');
+      const name = cleanText(document.getElementById('regName').value, 80);
+      const city = cleanText(document.getElementById('regCity').value, 60);
+      const country = cleanText(document.getElementById('regCountry').value, 60);
+      const email = document.getElementById('regEmail').value.trim().toLowerCase();
+      const password = document.getElementById('regPwd').value;
+      if (name.length < 2) { showAuthError('registerError', "Indiquez le nom de l'établissement."); return; }
+      if (password.length < 8) { showAuthError('registerError', 'Le mot de passe doit contenir au moins 8 caractères.'); return; }
+      if (password !== document.getElementById('regPwd2').value) { showAuthError('registerError', 'Les deux mots de passe ne correspondent pas.'); return; }
+      const btn = document.getElementById('btnRegister');
+      btn.disabled = true;
+      try {
+        await store.register({ name, city, country, email, password });
+        registerForm.reset();
+        showToast("🎉 Établissement inscrit !", "Un e-mail de confirmation vous a été envoyé.");
+      } catch (err) {
+        showAuthError('registerError', friendlyError(err));
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      showAuthError('loginError', '');
+      showAuthError('loginInfo', '');
+      const btn = document.getElementById('btnLogin');
+      btn.disabled = true;
+      try {
+        await store.login(document.getElementById('loginEmail').value.trim().toLowerCase(), document.getElementById('loginPwd').value);
+        loginForm.reset();
+      } catch (err) {
+        showAuthError('loginError', friendlyError(err));
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    document.getElementById('btnForgot').addEventListener('click', async () => {
+      showAuthError('loginError', '');
+      showAuthError('loginInfo', '');
+      const email = document.getElementById('loginEmail').value.trim().toLowerCase();
+      if (!email) { showAuthError('loginError', "Saisissez d'abord votre adresse e-mail ci-dessus."); return; }
+      try {
+        await store.resetPassword(email);
+        // Message identique que le compte existe ou non (ne révèle pas quelles adresses sont inscrites).
+        showAuthError('loginInfo', "Si un compte existe pour cette adresse, un e-mail de réinitialisation vient d'être envoyé. Pensez à vérifier les courriers indésirables.");
+      } catch (err) {
+        showAuthError('loginError', friendlyError(err));
+      }
+    });
+
+    function showVerifyMsg(text, ok) {
+      const box = document.getElementById('verifyMsg');
+      box.textContent = text || '';
+      box.className = 'text-xs mt-3 ' + (ok ? 'text-emerald-300' : 'text-red-400') + (text ? '' : ' hidden');
+    }
+
+    document.getElementById('btnVerifyCheck').addEventListener('click', async () => {
+      showVerifyMsg('');
+      try {
+        const verified = await store.refreshUser();
+        if (!verified) showVerifyMsg("Adresse pas encore confirmée. Cliquez sur le lien reçu par e-mail, puis réessayez.", false);
+        else showToast("✅ Adresse confirmée", "Vous pouvez saisir vos séances.");
+      } catch (err) {
+        showVerifyMsg(friendlyError(err), false);
+      }
+    });
+
+    let resendCooldown = null;
+    document.getElementById('btnVerifyResend').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      showVerifyMsg('');
+      try {
+        await store.resendVerification();
+        showVerifyMsg("E-mail de confirmation renvoyé.", true);
+      } catch (err) {
+        showVerifyMsg(friendlyError(err), false);
+        return;
+      }
+      // Délai de 60 s entre deux envois (évite le blocage « trop de demandes »).
+      let left = 60;
+      btn.disabled = true;
+      clearInterval(resendCooldown);
+      resendCooldown = setInterval(() => {
+        left--;
+        btn.textContent = left > 0 ? `Renvoyer l'e-mail (${left} s)` : "Renvoyer l'e-mail";
+        if (left <= 0) { clearInterval(resendCooldown); btn.disabled = false; }
+      }, 1000);
+    });
+
+    document.getElementById('tabViewCollective').addEventListener('click', () => setView('collective'));
+    document.getElementById('tabViewClass').addEventListener('click', () => {
+      if (appState.user && appState.user.emailVerified) { setView('class'); return; }
+      showToast("🏫 Espace établissement", appState.user ? "Confirmez d'abord votre adresse e-mail." : "Inscrivez-vous ou connectez-vous pour suivre les objectifs de votre établissement.");
+      document.getElementById('leftCol').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    document.getElementById('btnLogout').addEventListener('click', async () => {
+      try { await store.logout(); } catch (err) { showToast("⚠️ Déconnexion impossible", friendlyError(err)); }
+    });
+
+    document.getElementById('btnGoSpace').addEventListener('click', () => {
+      document.getElementById('leftCol').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    btnExportData.addEventListener('click', () => {
+      const dataStr = JSON.stringify({ version: 3, etablissement: appState.user ? appState.user.name : null, sessions: appState.mySessions }, null, 2);
+      const blob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `eps_everest_seances_${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast("💾 Fichier exporté", `${appState.mySessions.length} séance(s) exportée(s).`);
+    });
+
+    window.addEventListener('load', () => {
+      resizeCanvas();
+      populateActivities();
+
+      // ?demo=1 force le mode démonstration locale (aucune écriture dans Firebase), pratique pour tester l'interface.
+      const forceDemo = new URLSearchParams(window.location.search).get('demo') === '1';
+      if (FIREBASE_CONFIG && window.firebase && !forceDemo) {
+        try { store = createFirebaseStore(FIREBASE_CONFIG); } catch (err) { console.error('Firebase indisponible :', err); }
+      }
+      if (!store) store = createLocalStore();
+      document.getElementById('configBanner').classList.toggle('hidden', store.mode === 'firebase');
+
+      renderTestJumpButtons();
+      updateDashboard();
+      updatePreviewCalculations();
+      renderAuthState();
+
+      store.start({
+        onEtabs: list => { appState.etabs = list; updateDashboard(); },
+        onUser: user => { appState.user = user; renderAuthState(); updateDashboard(); },
+        onSessions: list => { appState.mySessions = list; renderHistoryList(); },
+        onError: err => showToast("⚠️ Erreur de connexion", friendlyError(err))
+      });
+      requestRedraw();
+    });
+  </script>
+</body>
+</html>

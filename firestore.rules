@@ -1,0 +1,81 @@
+rules_version = '2';
+
+// Règles de sécurité Firestore - EPS Mission Everest
+// Principes :
+//  - le cumul (totaux par établissement) est lisible par tous, sans connexion ;
+//  - chaque établissement ne peut écrire que dans SON document et SES séances ;
+//  - le détail des séances n'est lisible que par l'établissement concerné ;
+//  - les valeurs sont bornées pour limiter les erreurs de saisie et les abus.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // Adresse e-mail confirmée (jeton Firebase Auth) : requise pour enregistrer ou supprimer des séances.
+    function isVerifiedOwner(uid) {
+      return isOwner(uid) && request.auth.token.email_verified == true;
+    }
+
+    function shortText(v, maxLen) {
+      return v is string && v.size() <= maxLen;
+    }
+
+    match /etablissements/{uid} {
+      allow read: if true;
+
+      allow create: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['name', 'city', 'country', 'totalKcal', 'totalBurgers', 'sessionsCount', 'createdAtMs', 'lastSessionAtMs'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 2
+        && request.resource.data.name.size() <= 80
+        && shortText(request.resource.data.city, 60)
+        && shortText(request.resource.data.country, 60)
+        && request.resource.data.totalKcal == 0
+        && request.resource.data.totalBurgers == 0
+        && request.resource.data.sessionsCount == 0;
+
+      // Seuls les totaux peuvent changer, et de façon bornée à une séance maximum par écriture.
+      allow update: if isVerifiedOwner(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['totalKcal', 'totalBurgers', 'sessionsCount', 'lastSessionAtMs'])
+        && request.resource.data.totalKcal is number
+        && request.resource.data.totalBurgers is number
+        && request.resource.data.sessionsCount is number
+        && request.resource.data.totalKcal >= -1
+        && request.resource.data.totalBurgers >= -0.01
+        && request.resource.data.sessionsCount >= 0
+        && math.abs(request.resource.data.totalKcal - resource.data.totalKcal) <= 5000000
+        && math.abs(request.resource.data.totalBurgers - resource.data.totalBurgers) <= 10000
+        && math.abs(request.resource.data.sessionsCount - resource.data.sessionsCount) <= 1;
+
+      allow delete: if false;
+
+      match /seances/{sid} {
+        allow read: if isOwner(uid);
+
+        allow create: if isVerifiedOwner(uid)
+          && request.resource.data.keys().hasOnly(['date', 'activityId', 'activityName', 'students', 'classes', 'weight', 'minutes', 'intensity', 'met', 'calories', 'burgers', 'createdAtMs'])
+          && request.resource.data.date is string && request.resource.data.date.size() == 10
+          && shortText(request.resource.data.activityId, 40)
+          && shortText(request.resource.data.activityName, 120)
+          && request.resource.data.students is int && request.resource.data.students >= 1 && request.resource.data.students <= 60
+          && request.resource.data.classes is int && request.resource.data.classes >= 1 && request.resource.data.classes <= 30
+          && request.resource.data.weight is number && request.resource.data.weight >= 10 && request.resource.data.weight <= 120
+          && request.resource.data.minutes is int && request.resource.data.minutes >= 1 && request.resource.data.minutes <= 180
+          && request.resource.data.intensity in ['low', 'mid', 'high']
+          && request.resource.data.met is number && request.resource.data.met >= 0 && request.resource.data.met <= 20
+          && request.resource.data.calories is number && request.resource.data.calories >= 0 && request.resource.data.calories <= 5000000
+          && request.resource.data.burgers is number && request.resource.data.burgers >= 0 && request.resource.data.burgers <= 10000
+          && request.resource.data.createdAtMs is int;
+
+        allow update: if false;
+        allow delete: if isVerifiedOwner(uid);
+      }
+    }
+  }
+}
