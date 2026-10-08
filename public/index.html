@@ -68,47 +68,22 @@
 </head>
 <body class="min-h-full flex flex-col font-sans antialiased text-slate-200 bg-gradient-to-b from-slate-950 via-slate-900 to-indigo-950 selection:bg-amber-500 selection:text-black">
 
-  <header class="border-b border-slate-800/80 bg-slate-900/80 backdrop-blur-md sticky top-0 z-40 px-4 py-3 sm:px-6 shadow-lg">
-    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
-      <div class="flex items-center space-x-3">
-        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-300 flex items-center justify-center text-2xl shadow-lg shadow-amber-500/20">
-          🍔
-        </div>
-        <div>
-          <h1 class="text-lg sm:text-xl font-bold tracking-tight text-white flex items-center gap-2">
-            EPS Mission Everest
-            <span class="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-medium">Big Mac Tracker</span>
-          </h1>
-          <p class="text-xs text-slate-400">Défi collectif des établissements : l'énergie des élèves, empilée en Big Macs jusqu'au sommet</p>
-        </div>
-      </div>
-
-      <div class="flex items-center gap-3">
-        <div class="bg-slate-800/90 border border-slate-700/80 rounded-lg px-3 py-1.5 flex items-center gap-2 text-xs">
-          <span class="text-slate-400">Cumul collectif :</span>
-          <span id="badgeTotalBurgers" class="font-extrabold text-amber-400 text-sm">0</span>
-          <span class="text-slate-400">🍔</span>
-        </div>
-        
-        <div class="bg-slate-800/90 border border-slate-700/80 rounded-lg px-3 py-1.5 hidden sm:flex items-center gap-2 text-xs">
-          <span>🏫</span>
-          <span id="badgeEtabs" class="font-extrabold text-emerald-300 text-sm">0</span>
-          <span class="text-slate-400">établissement(s)</span>
-        </div>
-
-        <button id="btnGoSpace" type="button" class="px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition cursor-pointer">
-          🏫 <span id="goSpaceLabel">Inscription</span>
-        </button>
-
-        <button id="btnSoundToggle" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition text-xs flex items-center gap-1.5" title="Activer/Désactiver le son">
-          <span id="soundIcon">🔊</span>
-          <span class="hidden sm:inline" id="soundLabel">Audio</span>
-        </button>
-      </div>
+  <header class="border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-md sticky top-0 z-40 px-4 py-3 sm:px-6 shadow-lg">
+    <div class="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      <h1 class="text-lg sm:text-xl font-bold tracking-tight text-white flex items-center gap-2">
+        <span>🍔</span> EPS Mission Everest
+      </h1>
+      <nav id="viewTabs" class="flex gap-1 bg-slate-800/80 rounded-xl p-1 text-sm font-semibold">
+        <button id="tabViewCollective" type="button" class="px-4 py-2 rounded-lg cursor-pointer">🌍 Cumul collectif</button>
+        <button id="tabViewClass" type="button" class="px-4 py-2 rounded-lg cursor-pointer">🏫 Mon établissement</button>
+      </nav>
+      <button id="btnSoundToggle" class="hidden sm:flex p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs" title="Son">
+        <span id="soundIcon">🔊</span><span class="hidden" id="soundLabel">Audio</span>
+      </button>
     </div>
   </header>
 
-  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+  <main id="mainGrid" class="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
 
     <div id="configBanner" class="hidden lg:col-span-12 order-first bg-amber-500/10 border border-amber-500/40 rounded-xl px-4 py-3 text-xs text-amber-200">
       ⚠️ <strong>Mode démonstration :</strong> les inscriptions et les séances restent sur cet appareil et ne sont pas partagées.
@@ -364,14 +339,8 @@
       </section>
     </div>
 
-    <div class="lg:col-span-7 flex flex-col space-y-4 order-1 lg:order-2">
+    <div id="rightCol" class="lg:col-span-7 flex flex-col space-y-4 order-1 lg:order-2">
       
-      <!-- Choix de l'écran : cumul collectif ou établissement -->
-      <div id="viewTabs" class="flex gap-1 bg-slate-900/90 border border-slate-800 rounded-xl p-1 text-xs font-semibold">
-        <button id="tabViewCollective" type="button" class="flex-1 py-2 rounded-lg cursor-pointer">🌍 Cumul collectif</button>
-        <button id="tabViewClass" type="button" class="flex-1 py-2 rounded-lg cursor-pointer">🏫 Mon établissement</button>
-      </div>
-
       <div class="bg-slate-900/90 rounded-2xl p-4 border border-slate-800 shadow-xl backdrop-blur-sm grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
         <div class="p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/50">
           <div class="text-[10px] text-slate-400 uppercase font-semibold">Calories Cumulées</div>
@@ -1019,7 +988,6 @@
     const testSessionsBanner = document.getElementById('testSessionsBanner');
     const testSessionsCount = document.getElementById('testSessionsCount');
     const btnDeleteTestSessions = document.getElementById('btnDeleteTestSessions');
-    const badgeTotalBurgers = document.getElementById('badgeTotalBurgers');
 
     const currentMilestoneIcon = document.getElementById('currentMilestoneIcon');
     const currentMilestoneName = document.getElementById('currentMilestoneName');
@@ -1215,7 +1183,6 @@
 
       statTotalKcal.textContent = formatNumberFr(appState.totalCalories);
       statTotalBurgers.textContent = formatNumberFr(appState.totalBurgers);
-      badgeTotalBurgers.textContent = formatNumberFr(appState.totalBurgers);
 
       const heightM = appState.totalHeightMeters;
       if (heightM < 1000) {
@@ -1316,7 +1283,6 @@
       const list = document.getElementById('leaderboardList');
       const etabs = [...appState.etabs].sort((a, b) => (Number(b.totalBurgers) || 0) - (Number(a.totalBurgers) || 0));
       document.getElementById('etabCountBadge').textContent = `${etabs.length} établissement${etabs.length > 1 ? 's' : ''}`;
-      document.getElementById('badgeEtabs').textContent = formatNumberFr(etabs.length);
       list.innerHTML = '';
 
       if (etabs.length === 0) {
@@ -1383,13 +1349,30 @@
       document.getElementById('roadmapTitle').textContent = cls ? 'Feuille de route : mon établissement' : 'Feuille de route : cumul collectif';
       document.getElementById('roadmapSub').textContent = cls ? "Big Macs restants pour chaque objectif de l'établissement" : 'Big Macs restants pour chaque palier (cumul collectif)';
       document.getElementById('leaderboardSection').classList.toggle('hidden', cls);
+    }
+
+    // Deux pages distinctes : « collective » (cumul public) et « space » (espace de l'établissement).
+    let page = 'collective';
+
+    function setPage(p) {
+      page = p;
+      const verified = !!(appState.user && appState.user.emailVerified);
+      setView(p === 'space' && verified ? 'class' : 'collective');
+      const space = p === 'space';
+      const left = document.getElementById('leftCol');
+      const right = document.getElementById('rightCol');
+      left.classList.toggle('hidden', !space);
+      right.classList.toggle('hidden', space && !verified);
+      left.classList.toggle('lg:col-span-5', space && verified);
+      left.classList.toggle('lg:col-span-6', !(space && verified));
+      left.classList.toggle('lg:col-start-4', !(space && verified));
       const on = ['bg-amber-500', 'text-slate-950'];
       const off = ['text-slate-300', 'hover:bg-slate-700'];
       const tc = document.getElementById('tabViewCollective');
       const tk = document.getElementById('tabViewClass');
       [tc, tk].forEach(t => t.classList.remove(...on, ...off));
-      tc.classList.add(...(cls ? off : on));
-      tk.classList.add(...(cls ? on : off));
+      tc.classList.add(...(space ? off : on));
+      tk.classList.add(...(space ? on : off));
     }
 
     function setView(view) {
@@ -1413,9 +1396,9 @@
       journalSection.classList.toggle('hidden', !verified);
       if (user && !verified) document.getElementById('verifyEmail').textContent = user.email || '';
       // Établissement confirmé : on ouvre automatiquement son écran (une fois par connexion).
-      if (verified && autoViewUid !== user.uid) { autoViewUid = user.uid; setView('class'); }
-      if (!verified && appState.view === 'class') setView('collective');
+      if (verified && autoViewUid !== user.uid) { autoViewUid = user.uid; page = 'space'; }
       if (!user) autoViewUid = null;
+      setPage(page);
       // En ligne, on vérifie régulièrement si l'adresse a été confirmée (déblocage automatique).
       if (user && !verified && store && store.mode === 'firebase') {
         if (!verifyTimer) verifyTimer = setInterval(() => { store.refreshUser().catch(() => {}); }, 5000);
@@ -1423,7 +1406,6 @@
         clearInterval(verifyTimer);
         verifyTimer = null;
       }
-      document.getElementById('goSpaceLabel').textContent = user ? 'Mon espace' : 'Inscription';
       if (user) {
         document.getElementById('teacherName').textContent = [user.name, user.city].filter(Boolean).join(' · ');
         document.getElementById('teacherLogin').textContent = user.email || '';
@@ -2525,20 +2507,13 @@
       }, 1000);
     });
 
-    document.getElementById('tabViewCollective').addEventListener('click', () => setView('collective'));
-    document.getElementById('tabViewClass').addEventListener('click', () => {
-      if (appState.user && appState.user.emailVerified) { setView('class'); return; }
-      showToast("🏫 Espace établissement", appState.user ? "Confirmez d'abord votre adresse e-mail." : "Inscrivez-vous ou connectez-vous pour suivre les objectifs de votre établissement.");
-      document.getElementById('leftCol').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
+    document.getElementById('tabViewCollective').addEventListener('click', () => { setPage('collective'); window.scrollTo({ top: 0 }); });
+    document.getElementById('tabViewClass').addEventListener('click', () => { setPage('space'); window.scrollTo({ top: 0 }); });
 
     document.getElementById('btnLogout').addEventListener('click', async () => {
       try { await store.logout(); } catch (err) { showToast("⚠️ Déconnexion impossible", friendlyError(err)); }
     });
 
-    document.getElementById('btnGoSpace').addEventListener('click', () => {
-      document.getElementById('leftCol').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
 
     btnExportData.addEventListener('click', () => {
       const dataStr = JSON.stringify({ version: 3, etablissement: appState.user ? appState.user.name : null, sessions: appState.mySessions }, null, 2);
