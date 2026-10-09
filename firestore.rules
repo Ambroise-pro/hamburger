@@ -53,7 +53,8 @@ service cloud.firestore {
         && math.abs(request.resource.data.totalBurgers - resource.data.totalBurgers) <= 10000
         && math.abs(request.resource.data.sessionsCount - resource.data.sessionsCount) <= 1;
 
-      allow delete: if false;
+      // Droit à l'effacement (RGPD) : l'établissement peut supprimer son propre document.
+      allow delete: if isOwner(uid);
 
       match /seances/{sid} {
         allow read: if isOwner(uid);

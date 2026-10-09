@@ -1,0 +1,37 @@
+name: CI sécurité
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 6 * * 1" # chaque lundi : détecte les nouvelles vulnérabilités sans attendre un commit
+
+permissions:
+  contents: read
+
+jobs:
+  build-lint-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Audit des dépendances (vulnérabilités hautes et critiques)
+        run: npm audit --omit=dev --audit-level=high
+      - name: ESLint (règles sécurité)
+        run: npm run lint
+      - name: Build
+        run: npm run build
+
+  semgrep:
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@v4
+      - name: Semgrep (OWASP, JavaScript, secrets)
+        run: semgrep scan --error --config p/javascript --config p/owasp-top-ten --config p/secrets --exclude public/vendor

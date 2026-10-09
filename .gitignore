@@ -1,0 +1,20 @@
+# Dépendances et fichiers générés (reconstruits par « npm run build »)
+node_modules/
+public/vendor/
+public/assets/app.css
+
+# Secrets : ne JAMAIS les committer (utiliser les secrets GitHub / Vercel / Google Secret Manager)
+.env
+.env.*
+*.pem
+*.key
+*service-account*.json
+*-credentials.json
+
+# Outils
+.firebase/
+.vercel/
+firebase-debug.log
+firestore-debug.log
+npm-debug.log*
+.DS_Store

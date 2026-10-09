@@ -1,0 +1,40 @@
+name: Déploiement des règles Firestore
+
+on:
+  push:
+    branches: [main]
+    paths: [firestore.rules, firebase.json]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-firestore-rules
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      HAS_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' }}
+    steps:
+      - name: Secret absent : déploiement ignoré
+        if: env.HAS_SA != 'true'
+        run: echo "::notice::Secret FIREBASE_SERVICE_ACCOUNT non configuré, règles non déployées (voir SECURITE.md, ligne 6 bis)."
+      - uses: actions/checkout@v4
+        if: env.HAS_SA == 'true'
+      - uses: actions/setup-node@v4
+        if: env.HAS_SA == 'true'
+        with:
+          node-version: 22
+      # Compte de service dédié, rôle minimal « Firebase Rules Admin » (roles/firebaserules.admin) uniquement.
+      # Sa clé JSON est stockée dans le secret GitHub FIREBASE_SERVICE_ACCOUNT (environnement « production »), jamais dans le dépôt.
+      - uses: google-github-actions/auth@v2
+        if: env.HAS_SA == 'true'
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      - name: Déployer uniquement les règles, sur le projet nommé
+        if: env.HAS_SA == 'true'
+        run: npx --yes firebase-tools@14 deploy --only firestore:rules --project hamburger-6d3aa --non-interactive

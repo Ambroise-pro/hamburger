@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0px) rotate(0deg); }
+      50% { transform: translateY(-8px) rotate(2deg); }
+    }
+    @keyframes pulse-glow {
+      0%, 100% { opacity: 0.4; transform: scale(1); }
+      50% { opacity: 0.8; transform: scale(1.05); }
+    }
+    .floating-burger {
+      animation: float 4s ease-in-out infinite;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .floating-burger, .animate-ping { animation: none !important; }
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.6);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+
+    /* ===== Thème clair (maquette « Mission Everest ») ===== */
+    html, body { background: #F3F6FA !important; background-image: none !important; color: #0E1A2B; font-family: 'DM Sans', system-ui, sans-serif; }
+    h1, h2, h3, .font-black, .font-extrabold { font-family: 'Bricolage Grotesque', 'DM Sans', sans-serif; letter-spacing: -0.01em; }
+    .text-white, .text-slate-100, .text-slate-200, .text-slate-300 { color: #0E1A2B !important; }
+    .text-slate-400, .text-slate-500, .text-slate-600 { color: #5B6B80 !important; }
+    .text-amber-400, .text-amber-300, .text-amber-200, .text-yellow-300, .text-amber-300\/80, .text-amber-200\/90, .text-amber-200\/80 { color: #B45F00 !important; }
+    .text-emerald-300, .text-emerald-400 { color: #0F7B55 !important; }
+    .text-cyan-400 { color: #0B6FA0 !important; }
+    .text-red-400 { color: #C62828 !important; }
+    .text-indigo-400 { color: #4338CA !important; }
+    .text-fuchsia-300, .text-fuchsia-200, .text-fuchsia-100 { color: #A21CAF !important; }
+    .hover\:text-white:hover, .hover\:text-slate-200:hover { color: #0E1A2B !important; }
+    .hover\:text-amber-300:hover { color: #B45F00 !important; }
+    .bg-slate-900\/90, .bg-slate-900\/80, .bg-slate-900 { background-color: #FFFFFF !important; }
+    .bg-slate-800\/90 { background-color: #FFFFFF !important; }
+    .bg-slate-800, .bg-slate-800\/80, .bg-slate-800\/70, .bg-slate-800\/60, .bg-slate-800\/50, .bg-slate-800\/40, .bg-slate-700, .bg-slate-950 { background-color: #EEF2F7 !important; }
+    .hover\:bg-slate-700:hover, .hover\:bg-slate-700\/80:hover { background-color: #E3E9F1 !important; }
+    .border-slate-800, .border-slate-800\/80, .border-slate-700\/50, .border-slate-700\/60 { border-color: #E1E7EF !important; }
+    .border-slate-700 { border-color: #C9D3E0 !important; }
+    .bg-amber-500\/10, .bg-amber-500\/15, .bg-amber-500\/30 { background-color: #FFF4E0 !important; }
+    .bg-emerald-600, .hover\:bg-emerald-500:hover { background-color: #0E1A2B !important; color: #FFFFFF !important; }
+    .shadow-xl, .shadow-2xl, .shadow-lg { box-shadow: 0 1px 2px rgba(14,26,43,.06) !important; }
+    input, select { color: #0E1A2B !important; }
+    ::placeholder { color: #8795A8 !important; }
+    ::-webkit-scrollbar-track { background: #EEF2F7; }
+    ::-webkit-scrollbar-thumb { background: #C9D3E0; }
+    #sceneBox { background: #EEF5FD !important; border-color: #E1E7EF !important; }
+    .tab-on { background: #0E1A2B; color: #FFFFFF !important; }
+    .tab-off { color: #0E1A2B !important; }
+    .tab-off:hover { background: #E3E9F1; }
+    #statTotalKcal, #statTotalBurgers, #statTotalHeight, #statPercentGoal { font-size: 1.9rem !important; line-height: 1.1; }
+    #toast { background: #FFFFFF !important; }
