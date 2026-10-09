@@ -16,11 +16,12 @@ Légende : ✅ fait dans le dépôt · 🔧 à faire dans une console (Firebase,
 | 6 bis | CI/CD déploiement | ✅ / 🔧 | `deploy-rules.yml` : projet ciblé par son nom (`--project hamburger-6d3aa`), `--only firestore:rules`, Node 22 (LTS supportée), permissions GitHub en lecture seule, environnement `production`. 🔧 Créer un compte de service dédié avec le **seul** rôle *Firebase Rules Admin*, mettre sa clé JSON dans le secret `FIREBASE_SERVICE_ACCOUNT` de l'environnement GitHub `production` (avec approbation manuelle si souhaité). Mieux encore : Workload Identity Federation (sans clé). |
 | 7 | Injections (XSS) | ✅ | Toutes les données affichées passent par `textContent` (`el()`), `innerHTML` n'est utilisé que pour vider des conteneurs. Contrôlé par ESLint `no-unsanitized`. Pas de console d'administration. Aucune URL construite à partir de saisies. |
 | 8 | Exposition fichiers | ✅ / 🔧 | Seul `public/` est publié : `firestore.rules`, la documentation et la CI ne sont pas servis. `robots.txt`. 🔧 Alertes budget : *Google Cloud › Facturation › Budgets et alertes* (ex. 5 €, alertes à 50/90/100 %), et suivi de l'usage Firestore. |
-| 9 | RGPD | ✅ / ⏳ | ✅ Minimisation : aucune donnée d'élève, e-mail jamais public. ✅ Pages `mentions-legales.html` et `confidentialite.html`. ✅ Droits : export JSON et **suppression du compte** dans l'appli. ✅ Pas de cookie soumis à consentement. ⏳ Compléter les champs `[entre crochets]` des pages légales (éditeur, contact, DPO, base légale, durée). ⏳ Inscrire le traitement au registre de l'établissement ou de l'académie et informer le DPO. |
+| 9 | RGPD | ✅ / ⏳ | ✅ Minimisation : aucune donnée d'élève, e-mail jamais public. ✅ Pages `mentions-legales.html`, `confidentialite.html` et `cookies.html` (VAUBAN, DPO, CNPD), données du défi stockées dans l'UE. ✅ Polices auto-hébergées (plus d'appel à Google Fonts). ✅ Droits : export JSON et **suppression du compte** dans l'appli. ✅ Pas de cookie soumis à consentement. ⏳ Inscrire le traitement au registre de l'établissement ou de l'académie et informer le DPO. |
 | 10 | Suivi | ✅ | Ce fichier. Journal d'audit ci-dessous. Revue trimestrielle : relire ce tableau, `npm audit`, PR Dependabot, métriques App Check, utilisateurs Firebase inactifs, factures. |
 
 ## Journal d'audit
 
 | Date | Changement | Par |
 |---|---|---|
+| 2026-10-09 | Pages légales adaptées des documents AEFE Tour (VAUBAN), politique cookies, polices auto-hébergées. | Claude Code |
 | 2026-10-09 | Mise en place initiale de la checklist (auto-hébergement, CSP, CI, Dependabot, règles, App Check prêt, suppression de compte, pages légales). | Claude Code |

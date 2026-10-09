@@ -12,6 +12,8 @@
     "audit": "npm audit --omit=dev --audit-level=high"
   },
   "dependencies": {
+    "@fontsource/bricolage-grotesque": "^5.3.0",
+    "@fontsource/dm-sans": "^5.3.0",
     "firebase": "^12.19.0"
   },
   "devDependencies": {

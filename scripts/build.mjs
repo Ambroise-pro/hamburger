@@ -17,6 +17,20 @@ for (const name of ['app', 'app-check', 'auth', 'firestore']) {
   copyFileSync(join(firebaseDir, `firebase-${name}-compat.js`), join(vendorDir, `firebase-${name}-compat.js`));
 }
 
+// Polices auto-hébergées (aucune requête vers Google Fonts : l'IP des visiteurs n'est pas transmise).
+const fontsDir = join(root, 'public', 'assets', 'fonts');
+mkdirSync(fontsDir, { recursive: true });
+const fonts = [
+  ['@fontsource/dm-sans', 'dm-sans-latin-400-normal.woff2'],
+  ['@fontsource/dm-sans', 'dm-sans-latin-500-normal.woff2'],
+  ['@fontsource/dm-sans', 'dm-sans-latin-700-normal.woff2'],
+  ['@fontsource/bricolage-grotesque', 'bricolage-grotesque-latin-600-normal.woff2'],
+  ['@fontsource/bricolage-grotesque', 'bricolage-grotesque-latin-800-normal.woff2']
+];
+for (const [pkg, file] of fonts) {
+  copyFileSync(join(dirname(require.resolve(`${pkg}/package.json`)), 'files', file), join(fontsDir, file));
+}
+
 mkdirSync(join(root, 'public', 'assets'), { recursive: true });
 execFileSync(process.execPath, [
   require.resolve('tailwindcss/lib/cli.js'),

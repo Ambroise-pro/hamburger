@@ -2,6 +2,7 @@
 node_modules/
 public/vendor/
 public/assets/app.css
+public/assets/fonts/
 
 # Secrets : ne JAMAIS les committer (utiliser les secrets GitHub / Vercel / Google Secret Manager)
 .env
