@@ -63,3 +63,26 @@
     .tab-off:hover { background: #E3E9F1; }
     #statTotalKcal, #statTotalBurgers, #statTotalHeight, #statPercentGoal { font-size: 1.9rem !important; line-height: 1.1; }
     #toast { background: #FFFFFF !important; }
+
+    /* Objectifs : un carnet d'expédition, du premier pas au sommet. */
+    #roadmapList { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; max-height: none; overflow: visible; padding: 0; }
+    #roadmapList > * { margin: 0; }
+    .goal-card { --goal-color: #536781; --goal-tint: #edf2f8; position: relative; padding: 16px; border: 1px solid #dce4ee; border-radius: 20px; background: #fff; color: #15263c; overflow: hidden; }
+    .goal-card.is-next { --goal-color: #995000; --goal-tint: #fff0cf; border: 2px solid #e9b34c; padding: 15px; background: linear-gradient(145deg, #fff8e9, #fff 70%); box-shadow: 0 4px 16px #b9771010; }
+    .goal-card.is-reached { --goal-color: #137451; --goal-tint: #e1f5e9; border-color: #b6ddc6; }
+    .goal-card.is-final { grid-column: 1 / -1; }
+    .goal-topline, .goal-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .goal-step { color: #66758a; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    .goal-status { padding: 4px 8px; border-radius: 20px; background: var(--goal-tint); color: var(--goal-color); font-size: 10px; font-weight: 700; }
+    .goal-portrait { display: flex; align-items: center; gap: 12px; margin: 16px 0 12px; }
+    .goal-icon { flex: 0 0 56px; height: 56px; display: grid; place-items: center; border-radius: 18px; background: var(--goal-tint); font-size: 30px; box-shadow: inset 0 -3px 0 #10243a08; }
+    .goal-name { margin: 0; font-size: 14px; line-height: 1.35; font-weight: 800; overflow-wrap: anywhere; }
+    .goal-height { margin-top: 3px; color: var(--goal-color); font-size: 12px; font-weight: 700; }
+    .goal-description { margin: 0 0 14px; color: #53647a; font-size: 11px; line-height: 1.6; }
+    .goal-track { height: 7px; overflow: hidden; border-radius: 8px; background: #e8edf3; }
+    .goal-fill { height: 100%; border-radius: inherit; background: #e8ab35; transition: width .4s ease; }
+    .is-reached .goal-fill { background: #33a477; }
+    .goal-meta { margin-top: 8px; color: #53647a; font-size: 11px; line-height: 1.4; }
+    .goal-percent { font-weight: 800; color: var(--goal-color); white-space: nowrap; }
+    @media (max-width: 520px) { #roadmapList { grid-template-columns: minmax(0, 1fr); } .goal-portrait { margin-top: 12px; } }
+    @media (prefers-reduced-motion: reduce) { .goal-fill { transition: none; } }

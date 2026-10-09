@@ -670,40 +670,37 @@
         return n;
       };
 
-      const milestones = activeMilestones().filter(m => m.height > 0);
-      const nextIndex = milestones.findIndex(m => appState.totalHeightMeters < m.height);
-      milestones.forEach((m, index) => {
-        const pct = Math.max(0, Math.min(100, (appState.totalHeightMeters / m.height) * 100));
+      activeMilestones().filter(m => m.height > 0).forEach(m => {
+        const burgersNeeded = Math.ceil(m.height / HEIGHT_PER_BIGMAC_METERS);
+        const kcalNeeded = burgersNeeded * CALORIES_PER_BIGMAC;
+        const pct = Math.min(100, (appState.totalHeightMeters / m.height) * 100);
         const reached = appState.totalHeightMeters >= m.height;
-        const isNext = index === nextIndex;
-        const isGoal = m.height === goal.height;
-        const burgersLeft = Math.ceil(Math.max(0, (m.height - appState.totalHeightMeters) / HEIGHT_PER_BIGMAC_METERS));
-        const row = el('article', 'goal-card' + (reached ? ' is-reached' : isNext ? ' is-next' : '') + (isGoal ? ' is-final' : ''));
-        const top = el('div', 'goal-topline');
-        top.append(el('span', 'goal-step', isGoal ? '★ Défi final' : `Étape ${String(index + 1).padStart(2, '0')}`),
-          el('span', 'goal-status', reached ? '✓ Atteint !' : isNext ? 'Prochain défi' : 'À explorer'));
-        const portrait = el('div', 'goal-portrait');
-        const icon = el('span', 'goal-icon', m.icon);
-        icon.setAttribute('aria-hidden', 'true');
-        const heading = el('div');
-        heading.append(el('h4', 'goal-name', m.name.replace(/^Plus haut (que |qu')/, '')),
-          el('div', 'goal-height', formatAltitude(m.height)));
-        portrait.append(icon, heading);
-        const bar = el('div', 'goal-track');
-        bar.setAttribute('role', 'progressbar');
-        bar.setAttribute('aria-label', m.name);
-        bar.setAttribute('aria-valuemin', '0');
-        bar.setAttribute('aria-valuemax', '100');
-        bar.setAttribute('aria-valuenow', pct.toFixed(1));
-        const fill = el('div', 'goal-fill');
-        fill.style.width = `${pct}%`;
-        bar.append(fill);
-        const detail = el('div', 'goal-meta');
-        detail.append(el('span', '', reached ? 'Bravo, un cap de plus !' : `Encore ${formatCompact(burgersLeft)} 🍔`),
-          el('span', 'goal-percent', pct > 0 && pct < 1 ? '< 1 %' : `${Math.floor(pct)} %`));
-        row.append(top, portrait);
-        if (reached || isNext) row.append(el('p', 'goal-description', reached ? m.desc : 'Chaque séance vous rapproche de ce nouveau cap.'));
-        row.append(bar, detail);
+        const isGoal = Math.abs(goal.height - m.height) < 1;
+        const burgersLeft = reached ? 0 : Math.ceil(Math.max(0, burgersNeeded - appState.totalBurgers));
+
+        const row = el('div', 'rounded-lg border px-2.5 py-1.5 ' +
+          (isGoal ? 'border-amber-500/60 bg-amber-500/10' : reached ? 'border-emerald-700/40 bg-emerald-900/10' : 'border-slate-800 bg-slate-800/40'));
+
+        const top = el('div', 'flex items-center justify-between gap-2 text-xs');
+        const name = el('div', 'font-semibold truncate ' + (reached ? 'text-emerald-300' : 'text-slate-200'),
+          `${reached ? '✔' : m.icon} ${m.name}`);
+        const right = el('div', 'flex items-center gap-2 shrink-0');
+        right.appendChild(el('span', 'text-[10px] text-slate-400 font-mono', formatAltitude(m.height)));
+        if (isGoal) {
+          right.appendChild(el('span', 'text-[10px] px-1.5 rounded bg-amber-500/30 text-amber-200 font-bold', 'OBJECTIF'));
+        }
+        top.append(name, right);
+
+        const bar = el('div', 'h-1 rounded-full bg-slate-700 overflow-hidden mt-1');
+        const fill = el('div', 'h-full rounded-full ' + (reached ? 'bg-emerald-400' : 'bg-amber-400'));
+        fill.style.width = `${pct.toFixed(2)}%`;
+        bar.appendChild(fill);
+
+        const detail = el('div', 'text-[10px] text-slate-400 mt-1',
+          `${formatCompact(burgersNeeded)} 🍔 · ${formatCompact(kcalNeeded)} kcal · ` +
+          (reached ? 'atteint' : `encore ${formatCompact(burgersLeft)} 🍔`));
+
+        row.append(top, bar, detail);
         list.appendChild(row);
       });
     }
@@ -770,7 +767,7 @@
         const nextDistStr = formatAltitude(mInfo.next.height);
         nextMilestoneTarget.textContent = `${mInfo.next.name} (${nextDistStr})`;
       } else {
-        nextMilestoneTarget.textContent = `${getGoal().label} atteint ! 🏆`;
+        nextMilestoneTarget.textContent = "Everest atteint ! 🏆";
       }
 
       renderHistoryList();
@@ -1225,36 +1222,37 @@
     function paintObjectLabel(x, y, text, reached) {
       ctx.save();
       ctx.font = '700 11px "DM Sans", sans-serif';
-      const label = (reached ? '✓ ' : '') + text;
+      const label = reached ? '✓ ' + text : text;
       const pad = 8;
       const tw = ctx.measureText(label).width;
       const boxX = Math.max(6, Math.min(canvasWidth - tw - pad * 2 - 62, x - tw / 2 - pad));
-      const boxY = Math.max(6, reached ? y + 12 : y - 26);
-      ctx.fillStyle = reached ? '#E1F5E9' : '#FFF4DF';
-      ctx.strokeStyle = reached ? '#56B38A' : '#E5B65B';
+      const boxY = Math.max(6, y - 26);
+      ctx.fillStyle = reached ? '#FFF4E0' : '#FFFFFF';
+      ctx.strokeStyle = reached ? '#E8890C' : '#C9D3E0';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.roundRect(boxX, boxY, tw + pad * 2, 20, 10);
       ctx.fill(); ctx.stroke();
-      ctx.fillStyle = reached ? '#176245' : INK;
+      ctx.fillStyle = reached ? '#8A4A00' : INK;
       ctx.fillText(label, boxX + pad, boxY + 14);
       ctx.restore();
     }
 
     // ---- Style commun des objectifs dessinés ----
-    // Illustrations en couleur, contours encre et badges distincts pour les objectifs atteints et à venir.
+    // Objectif atteint : couleurs pleines et contour encre. Objectif à atteindre : silhouette unie gris-bleu.
+    const GHOST = '#CCD7E4';
     const INK = '#0E1A2B';
     function beginObj(reached, h) {
       ctx.save();
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
       ctx.lineWidth = Math.max(1.2, Math.min(2.6, h * 0.012));
-      ctx.strokeStyle = '#304861';
+      ctx.strokeStyle = INK;
     }
     function paint(color, reached) {
-      ctx.fillStyle = color;
+      ctx.fillStyle = reached ? color : GHOST;
       ctx.fill();
-      ctx.stroke();
+      if (reached) ctx.stroke();
     }
     function groundShadow(x, groundY, w) {
       ctx.save();
@@ -1263,6 +1261,28 @@
       ctx.ellipse(x, groundY, w / 2, Math.max(2, w * 0.07), 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
+    }
+
+    // Dessine un repère non atteint en silhouette unie (même rendu que les objectifs de l'établissement).
+    const ghostCanvas = document.createElement('canvas');
+    function asGhost(draw) {
+      const main = ctx;
+      ghostCanvas.width = canvas.width;
+      ghostCanvas.height = canvas.height;
+      const g = ghostCanvas.getContext('2d');
+      g.setTransform(main.getTransform());
+      ctx = g;
+      try { draw(); } finally { ctx = main; }
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.globalAlpha = 1;
+      for (let i = 0; i < 4; i++) g.drawImage(ghostCanvas, 0, 0); // rend la silhouette opaque, détails compris
+      g.globalCompositeOperation = 'source-in';
+      g.fillStyle = GHOST;
+      g.fillRect(0, 0, ghostCanvas.width, ghostCanvas.height);
+      main.save();
+      main.setTransform(1, 0, 0, 1, 0, 0);
+      main.drawImage(ghostCanvas, 0, 0);
+      main.restore();
     }
 
     function drawCollege(x, groundY, topY, reached) {
@@ -1282,8 +1302,6 @@
         const wx = x - w / 2 + w * (c + 0.25) / cols;
         const wy = topY + roofH + h * (0.1 + r * 0.27);
         ctx.beginPath(); ctx.rect(wx, wy, ww, h * 0.15); paint('#BFE3FA', reached);
-        ctx.save();ctx.strokeStyle='#FFFFFF';ctx.lineWidth=Math.max(1,h*.012);
-        ctx.beginPath();ctx.moveTo(wx+ww*.2,wy+h*.025);ctx.lineTo(wx+ww*.65,wy+h*.09);ctx.stroke();ctx.restore();
       }
       // porte vitrée
       ctx.beginPath(); ctx.rect(x - w * 0.07, groundY - h * 0.26, w * 0.14, h * 0.26); paint('#0E7490', reached);
@@ -1295,9 +1313,9 @@
       const h = Math.max(6, groundY - topY);
       const u = Math.min(h / 100, canvasWidth * 0.36 / 26); // unité : 1 % de la hauteur totale (torche incluse), plafonnée pour rester étroite
       ctx.save();
-      ctx.globalAlpha = 1;
-      const stone = '#94a3b8';
-      const copper = '#2dd4bf';
+      ctx.globalAlpha = reached ? 0.95 : 0.5;
+      const stone = reached ? '#94a3b8' : '#475569';
+      const copper = reached ? '#2dd4bf' : '#64748b';
 
       // Piédestal (≈ 45 % de la hauteur) puis socle étoilé
       ctx.fillStyle = stone;
@@ -1334,7 +1352,7 @@
       ctx.lineTo(x + 11 * u, groundY - 90 * u);
       ctx.lineTo(x + 11 * u, groundY - 97 * u);
       ctx.stroke();
-      ctx.fillStyle = '#fbbf24';
+      ctx.fillStyle = reached ? '#fbbf24' : '#64748b';
       ctx.beginPath();
       ctx.ellipse(x + 11 * u, groundY - 100 * u, 2.4 * u, 3.6 * u, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -1347,31 +1365,35 @@
     }
 
     function drawEiffelTower(x, groundY, topY, reached) {
-      const h=Math.max(6,groundY-topY), w=Math.min(canvasWidth*.32,h*.48);
-      groundShadow(x,groundY,w);
-      beginObj(reached,h);
-      // Pieds évasés, taille incurvée et grande arche centrale.
-      ctx.beginPath();ctx.moveTo(x,topY);ctx.lineTo(x+w*.06,topY+h*.3);
-      ctx.bezierCurveTo(x+w*.1,topY+h*.65,x+w*.22,topY+h*.84,x+w*.5,groundY);
-      ctx.lineTo(x+w*.27,groundY);ctx.bezierCurveTo(x+w*.17,groundY-h*.25,x-w*.17,groundY-h*.25,x-w*.27,groundY);
-      ctx.lineTo(x-w*.5,groundY);ctx.bezierCurveTo(x-w*.22,topY+h*.84,x-w*.1,topY+h*.65,x-w*.06,topY+h*.3);
-      ctx.closePath();paint('#D99459',reached);
-      ctx.strokeStyle='#81583F';ctx.lineWidth=Math.max(1,h*.006);
-      for(let i=0;i<6;i++){
-        const y=topY+h*(.28+i*.1), half=w*(.055+i*.043), nextHalf=half+w*.043;
-        ctx.beginPath();ctx.moveTo(x-half,y);ctx.lineTo(x+nextHalf,y+h*.1);ctx.moveTo(x+half,y);ctx.lineTo(x-nextHalf,y+h*.1);ctx.stroke();
+      const h = Math.max(6, groundY - topY);
+      const w = Math.min(canvasWidth * 0.36, h * 0.38); // base ≈ 38 % de la hauteur
+      ctx.save();
+      ctx.globalAlpha = reached ? 0.95 : 0.5;
+      ctx.strokeStyle = reached ? '#f59e0b' : '#64748b';
+      ctx.lineWidth = Math.max(1.5, Math.min(4, h/90));
+      ctx.beginPath();
+      ctx.moveTo(x, topY); ctx.lineTo(x-w/2, groundY);
+      ctx.moveTo(x, topY); ctx.lineTo(x+w/2, groundY);
+      ctx.moveTo(x-w*0.38, groundY-h*0.18); ctx.lineTo(x+w*0.38, groundY-h*0.18);
+      ctx.moveTo(x-w*0.25, groundY-h*0.46); ctx.lineTo(x+w*0.25, groundY-h*0.46);
+      ctx.moveTo(x-w*0.12, groundY-h*0.73); ctx.lineTo(x+w*0.12, groundY-h*0.73);
+      for(let i=1;i<6;i++) {
+        const yy=topY+h*i/6, frac=i/6, half=w*frac/2;
+        ctx.moveTo(x-half,yy); ctx.lineTo(x+half,yy);
       }
-      [[.47,.17],[.77,.32]].forEach(([y,half])=>{ctx.beginPath();ctx.roundRect(x-w*half,topY+h*y,w*half*2,h*.035,h*.008);paint('#F4C887',reached);});
-      ctx.restore();drawObjectLabel(x,topY-4,'Tour Eiffel · 330 m',reached);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(x, groundY, w*0.22, Math.PI, 0); ctx.stroke();
+      ctx.restore();
+      drawObjectLabel(x, topY-4, 'Tour Eiffel · 330 m', reached);
     }
-
 
     function drawPisa(x, groundY, topY, reached) {
       const h = Math.max(6, groundY - topY);
       const w = Math.min(canvasWidth * 0.2, h * 0.27);
       const lean = -0.07; // ≈ 4° d'inclinaison
       ctx.save();
-      ctx.globalAlpha = 1;
+      ctx.globalAlpha = reached ? 0.96 : 0.55;
       ctx.translate(x, groundY);
       ctx.transform(1, 0, lean, 1, 0, 0);
       const levels = 8;
@@ -1380,14 +1402,14 @@
         const y = -(i + 1) * lh;
         const topLevel = i === levels - 1;
         const lw = topLevel ? w * 0.72 : w;
-        ctx.fillStyle = i % 2 ? '#FFF1D4' : '#E5CEAA';
+        ctx.fillStyle = reached ? (i % 2 ? '#f1f5f9' : '#e2e8f0') : '#64748b';
         ctx.fillRect(-lw / 2, y, lw, lh * 0.96);
         // arcades
-        ctx.fillStyle = '#475569';
+        ctx.fillStyle = reached ? '#475569' : '#334155';
         const arches = 5;
         for (let a = 0; a < arches; a++) {
           const ax = -lw / 2 + lw * (a + 0.35) / arches;
-          ctx.beginPath(); ctx.roundRect(ax, y + lh * .25, lw / arches * .45, lh * .55, [lw / arches * .22, lw / arches * .22, 0, 0]); ctx.fill();
+          ctx.fillRect(ax, y + lh * 0.25, lw / arches * 0.3, lh * 0.55);
         }
       }
       ctx.restore();
@@ -1398,11 +1420,11 @@
       const h = Math.max(6, groundY - topY);
       const w = Math.min(canvasWidth * 0.4, h * 1.65);
       ctx.save();
-      ctx.globalAlpha = 1;
+      ctx.globalAlpha = reached ? 0.96 : 0.55;
       const g = ctx.createLinearGradient(x - w / 2, 0, x + w / 2, 0);
-      g.addColorStop(0, '#f6d58c');
-      g.addColorStop(0.5, '#e0b152');
-      g.addColorStop(1, '#b8862f');
+      g.addColorStop(0, reached ? '#f6d58c' : '#64748b');
+      g.addColorStop(0.5, reached ? '#e0b152' : '#556275');
+      g.addColorStop(1, reached ? '#b8862f' : '#475569');
       ctx.fillStyle = g;
       ctx.beginPath();
       ctx.moveTo(x, topY);
@@ -1430,15 +1452,15 @@
       const h = Math.max(6, groundY - topY);
       const w = Math.min(canvasWidth * 0.2, h * 0.2);
       ctx.save();
-      ctx.globalAlpha = 1;
+      ctx.globalAlpha = reached ? 0.96 : 0.55;
       const g = ctx.createLinearGradient(x - w / 2, 0, x + w / 2, 0);
-      g.addColorStop(0, '#1f2937');
-      g.addColorStop(1, '#4b5563');
+      g.addColorStop(0, reached ? '#1f2937' : '#475569');
+      g.addColorStop(1, reached ? '#4b5563' : '#64748b');
       ctx.fillStyle = g;
       ctx.beginPath();
       ctx.roundRect(x - w / 2, topY, w, h, 2);
       ctx.fill();
-      ctx.strokeStyle = 'rgba(186, 230, 253, 0.45)';
+      ctx.strokeStyle = reached ? 'rgba(186, 230, 253, 0.45)' : 'rgba(148, 163, 184, 0.3)';
       ctx.lineWidth = 1;
       const floors = Math.max(6, Math.min(40, Math.round(h / 5)));
       for (let f = 1; f < floors; f++) {
@@ -1456,8 +1478,8 @@
       const h = Math.max(6, groundY - topY);
       const w = Math.min(canvasWidth * 0.3, h * 0.29);
       ctx.save();
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = '#cbd5e1';
+      ctx.globalAlpha = reached ? 0.96 : 0.55;
+      ctx.fillStyle = reached ? '#cbd5e1' : '#64748b';
       // gradins successifs (fraction de hauteur, fraction de largeur)
       const tiers = [[0.00, 0.18, 1.00], [0.18, 0.50, 0.74], [0.50, 0.68, 0.50], [0.68, 0.80, 0.30], [0.80, 0.88, 0.17]];
       tiers.forEach(([from, to, wf]) => {
@@ -1465,31 +1487,27 @@
         ctx.fillRect(x - tw / 2, groundY - h * to, tw, h * (to - from));
       });
       // flèche / antenne
-      ctx.strokeStyle = '#e2e8f0';
+      ctx.strokeStyle = reached ? '#e2e8f0' : '#64748b';
       ctx.lineWidth = Math.max(1.5, h * 0.012);
       ctx.beginPath();
       ctx.moveTo(x, groundY - h * 0.88);
       ctx.lineTo(x, topY);
       ctx.stroke();
-      // Fenêtres contenues dans chaque retrait de la façade.
-      ctx.fillStyle = '#F5D48C';
-      tiers.forEach(([from, to, wf]) => {
-        const tw = w * wf;
-        for (let level = from + .035; level < to - .015; level += .045) {
-          for (let col = -1; col <= 1; col++) {
-            ctx.fillRect(x + col * tw * .25 - tw * .045, groundY - h * level, tw * .09, Math.max(1, h * .012));
-          }
-        }
-      });
+      // fenêtres
+      ctx.fillStyle = reached ? 'rgba(250, 204, 21, 0.6)' : 'rgba(148, 163, 184, 0.35)';
+      for (let r = 0; r < 12; r++) {
+        const yy = groundY - h * (0.03 + r * 0.045);
+        ctx.fillRect(x - w * 0.4, yy, w * 0.8, 1.2);
+      }
       ctx.restore();
       drawObjectLabel(x, topY - 4, 'Empire State Building · 443 m', reached);
     }
 
     function drawBurj(x, groundY, topY, reached) {
       const h=Math.max(6,groundY-topY), w=Math.min(canvasWidth*0.3,Math.max(10,h*0.12));
-      ctx.save(); ctx.globalAlpha = 1;
+      ctx.save(); ctx.globalAlpha=reached?.92:.45;
       const g=ctx.createLinearGradient(x,topY,x,groundY);
-      g.addColorStop(0,'#e0f2fe'); g.addColorStop(1,'#0ea5e9');
+      g.addColorStop(0,reached?'#e0f2fe':'#64748b'); g.addColorStop(1,reached?'#0ea5e9':'#334155');
       ctx.fillStyle=g;
       ctx.beginPath(); ctx.moveTo(x,topY); ctx.lineTo(x+w*.10,topY+h*.18); ctx.lineTo(x+w*.23,topY+h*.18);
       ctx.lineTo(x+w*.28,topY+h*.38); ctx.lineTo(x+w*.40,topY+h*.38); ctx.lineTo(x+w*.46,groundY);
@@ -1499,22 +1517,19 @@
     }
 
     function drawMountain(x, groundY, topY, label, reached) {
-      const h = Math.max(6, groundY-topY), w = Math.min(canvasWidth*.36,h*1.6);
-      const ventoux = label.includes('Ventoux'), kili = label.includes('Kilimandjaro');
-      groundShadow(x,groundY,w);
-      beginObj(reached,h);
-      const ridge = kili ? [[-.5,1],[-.22,.22],[-.08,0],[.14,0],[.3,.35],[.5,1]]
-        : ventoux ? [[-.5,1],[-.3,.42],[0,0],[.22,.35],[.5,1]]
-        : [[-.5,1],[-.29,.49],[-.2,.56],[0,0],[.18,.36],[.26,.3],[.5,1]];
-      ctx.beginPath(); ridge.forEach(([dx,dy],i)=>i?ctx.lineTo(x+w*dx,topY+h*dy):ctx.moveTo(x+w*dx,topY+h*dy));
-      ctx.closePath(); paint(ventoux?'#8FAD98':'#8CAACB',reached);
-      ctx.beginPath(); ctx.moveTo(x,topY);ctx.lineTo(x+w*.5,groundY);ctx.lineTo(x-w*.1,groundY);ctx.lineTo(x+w*.09,topY+h*.43);ctx.closePath();paint('#52739E',reached);
-      ctx.beginPath();ctx.moveTo(x,topY); if(kili)ctx.lineTo(x+w*.14,topY);
-      ctx.lineTo(x+w*.15,topY+h*.3);ctx.lineTo(x+w*.04,topY+h*.24);ctx.lineTo(x-w*.03,topY+h*.34);ctx.lineTo(x-w*.1,topY+h*.25);ctx.lineTo(x-w*.15,topY+h*.34);ctx.closePath();paint('#F4FAFF',reached);
-      // Contreforts : des facettes plutôt qu'un triangle uniforme.
-      ctx.beginPath();ctx.moveTo(x-w*.5,groundY);ctx.lineTo(x-w*.23,topY+h*.62);ctx.lineTo(x+w*.02,groundY);ctx.closePath();paint('#6C929F',reached);
-      ctx.restore();drawObjectLabel(x,topY-4,label,reached);
+      const h=Math.max(6,groundY-topY), w=Math.min(canvasWidth*0.4,h*1.6);
+      ctx.save(); ctx.globalAlpha=reached?.92:.42;
+      const g=ctx.createLinearGradient(0,topY,0,groundY);
+      g.addColorStop(0,'#f8fafc'); g.addColorStop(.28,reached?'#cbd5e1':'#64748b'); g.addColorStop(1,reached?'#475569':'#334155');
+      ctx.fillStyle=g; ctx.beginPath(); ctx.moveTo(x-w/2,groundY); ctx.lineTo(x-w*.20,topY+h*.48); ctx.lineTo(x,topY);
+      ctx.lineTo(x+w*.13,topY+h*.30); ctx.lineTo(x+w*.28,topY+h*.52); ctx.lineTo(x+w/2,groundY); ctx.closePath(); ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,.88)'; ctx.beginPath(); ctx.moveTo(x,topY); ctx.lineTo(x-w*.10,topY+h*.20); ctx.lineTo(x-w*.02,topY+h*.16); ctx.lineTo(x+w*.08,topY+h*.23); ctx.lineTo(x+w*.13,topY+h*.30); ctx.closePath(); ctx.fill();
+      ctx.restore(); drawObjectLabel(x,topY-4,label,reached);
     }
+
+
+
+
 
 
     function drawPerson(x, groundY, topY, reached, o) {
@@ -1549,19 +1564,8 @@
       if (o.book) { ctx.beginPath(); ctx.roundRect(x + tw / 2 + h * 0.04, hipY - h * 0.15, h * 0.1, h * 0.14, h * 0.01); paint('#2563EB', reached); }
       // tête, cheveux, visage
       ctx.beginPath(); ctx.arc(x, headCY, headR, 0, Math.PI * 2); paint('#F2C49B', reached);
-      ctx.beginPath(); ctx.arc(x,headCY-headR*.12,headR*1.04,Math.PI,Math.PI*2);
-      ctx.lineTo(x+headR*.8,headCY);ctx.quadraticCurveTo(x+headR*.3,headCY-headR*.6,x-headR*.2,headCY-headR*.25);
-      ctx.lineTo(x-headR,headCY+headR*.1);ctx.closePath();paint(o.hair,reached);
-      if(o.child){
-        ctx.beginPath();ctx.roundRect(x-tw*.22,shoulderY+h*.09,tw*.44,h*.055,h*.015);paint('#F9CA65',reached);
-        ctx.strokeStyle='#DBEDFF';ctx.lineWidth=Math.max(1,h*.012);
-        ctx.beginPath();ctx.moveTo(x-tw*.3,shoulderY+h*.035);ctx.lineTo(x-tw*.3,hipY-h*.05);ctx.stroke();
-      }
-      if(o.book){
-        ctx.strokeStyle='#EFF6FF';ctx.lineWidth=Math.max(1,h*.008);
-        ctx.beginPath();ctx.moveTo(x+tw/2+h*.06,hipY-h*.11);ctx.lineTo(x+tw/2+h*.12,hipY-h*.11);ctx.stroke();
-      }
-      if (headR > 5) {
+      ctx.beginPath(); ctx.arc(x, headCY - headR * 0.08, headR * 1.03, Math.PI * 1.02, Math.PI * 1.98); ctx.closePath(); paint(o.hair, reached);
+      if (reached && headR > 5) {
         ctx.setLineDash([]);
         ctx.fillStyle = INK;
         [-1, 1].forEach(s => { ctx.beginPath(); ctx.arc(x + s * headR * 0.36, headCY + headR * 0.18, Math.max(1, headR * 0.1), 0, Math.PI * 2); ctx.fill(); });
@@ -1575,26 +1579,35 @@
 
     function drawTree(x, groundY, topY, reached) {
       const h = Math.max(6, groundY - topY);
-      const w = Math.min(h * .7, canvasWidth * .34);
-      groundShadow(x, groundY, w);
+      const r = h * 0.26;
+      groundShadow(x, groundY, r * 2.4);
       beginObj(reached, h);
+      // tronc évasé avec deux branches
       ctx.beginPath();
-      ctx.moveTo(x - w * .09, groundY); ctx.lineTo(x - w * .05, topY + h * .38);
-      ctx.lineTo(x + w * .05, topY + h * .38); ctx.lineTo(x + w * .1, groundY);
-      ctx.closePath(); paint('#B87848', reached);
-      // Trois volumes de feuillage et leurs faces éclairées.
-      [[-.25,.4,.29,'#26856A'],[.24,.4,.29,'#319D72'],[0,.26,.36,'#50B880']].forEach(([dx,dy,r,color]) => {
-        ctx.beginPath(); ctx.ellipse(x+w*dx,topY+h*dy,w*r,h*.26,0,0,Math.PI*2); paint(color,reached);
-        ctx.beginPath(); ctx.ellipse(x+w*(dx-.08),topY+h*(dy-.09),w*r*.46,h*.07,-.5,0,Math.PI*2); paint('#81D69A',reached);
-      });
-      ctx.strokeStyle = '#744B35'; ctx.lineWidth = Math.max(1,h*.01);
-      ctx.beginPath(); ctx.moveTo(x,groundY-h*.08); ctx.lineTo(x,groundY-h*.4); ctx.lineTo(x+w*.15,groundY-h*.5); ctx.stroke();
-      [[-.27,.43],[.2,.38],[.05,.19]].forEach(([dx,dy])=>{
-        ctx.beginPath(); ctx.arc(x+w*dx,topY+h*dy,Math.max(1,w*.045),0,Math.PI*2); paint('#FFB95B',reached);
-      });
-      ctx.restore(); drawObjectLabel(x,topY-4,'Arbre · 8 m',reached);
+      ctx.moveTo(x - h * 0.06, groundY); ctx.lineTo(x - h * 0.035, topY + r * 1.6);
+      ctx.lineTo(x + h * 0.035, topY + r * 1.6); ctx.lineTo(x + h * 0.06, groundY); ctx.closePath();
+      paint('#8B5A2B', reached);
+      // feuillage : grappes de cercles, de l'arrière vers l'avant
+      const blobs = [[-0.62, 1.35, 0.62], [0.62, 1.35, 0.62], [-0.38, 0.72, 0.66], [0.4, 0.7, 0.64], [0, 1.0, 0.95], [0, 0.42, 0.62]];
+      // contour commun : on trace d'abord tous les contours, puis tous les remplissages par-dessus
+      const blob = ([dx, dy, k]) => { ctx.beginPath(); ctx.arc(x + dx * r, topY + dy * r, k * r, 0, Math.PI * 2); };
+      if (reached) {
+        const lw = ctx.lineWidth;
+        ctx.lineWidth = lw * 2;
+        blobs.forEach(b => { blob(b); ctx.stroke(); });
+        ctx.lineWidth = lw;
+      }
+      ctx.fillStyle = reached ? '#2F9E58' : GHOST;
+      blobs.forEach(b => { blob(b); ctx.fill(); });
+      if (reached) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+        ctx.beginPath(); ctx.arc(x - r * 0.25, topY + r * 0.6, r * 0.28, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#DC2626'; // quelques pommes
+        [[0.35, 1.1], [-0.45, 1.3], [0.05, 0.75]].forEach(([dx, dy]) => { ctx.beginPath(); ctx.arc(x + dx * r, topY + dy * r, Math.max(1.5, r * 0.07), 0, Math.PI * 2); ctx.fill(); });
+      }
+      ctx.restore();
+      drawObjectLabel(x, topY - 4, 'Arbre · 8 m', reached);
     }
-
 
     function drawSchool(x, groundY, topY, reached) {
       const h = Math.max(6, groundY - topY);
@@ -1604,7 +1617,7 @@
       groundShadow(x, groundY, w * 1.1);
       beginObj(reached, h);
       // mât et drapeau
-      ctx.save(); ctx.strokeStyle = INK;
+      ctx.save(); if (!reached) ctx.strokeStyle = GHOST;
       ctx.beginPath(); ctx.moveTo(x, roofTop + h * 0.05); ctx.lineTo(x, topY); ctx.stroke(); ctx.restore();
       ctx.beginPath(); ctx.moveTo(x, topY); ctx.lineTo(x + h * 0.13, topY + h * 0.035); ctx.lineTo(x, topY + h * 0.07); ctx.closePath(); paint('#2563EB', reached);
       // murs et toit
@@ -1612,8 +1625,6 @@
       ctx.beginPath(); ctx.moveTo(x - w / 2 - 6, wallTop); ctx.lineTo(x, roofTop); ctx.lineTo(x + w / 2 + 6, wallTop); ctx.closePath(); paint('#C2410C', reached);
       // horloge au pignon
       ctx.beginPath(); ctx.arc(x, wallTop - h * 0.1, h * 0.055, 0, Math.PI * 2); paint('#FFFFFF', reached);
-      ctx.strokeStyle=INK;ctx.lineWidth=Math.max(1,h*.009);
-      ctx.beginPath();ctx.moveTo(x,wallTop-h*.135);ctx.lineTo(x,wallTop-h*.1);ctx.lineTo(x+h*.025,wallTop-h*.085);ctx.stroke();
       // fenêtres sur deux niveaux, porte au centre
       const cols = 5;
       for (let c = 0; c < cols; c++) {
@@ -1636,7 +1647,7 @@
       groundShadow(x, groundY, tankW * 1.4);
       beginObj(reached, h);
       // pieds et croisillons
-      ctx.strokeStyle = '#475569';
+      ctx.strokeStyle = reached ? '#475569' : GHOST;
       ctx.lineWidth = Math.max(2, h * 0.02);
       ctx.beginPath();
       [[-0.42, -0.6], [0.42, 0.6], [-0.14, -0.2], [0.14, 0.2]].forEach(([a, b]) => { ctx.moveTo(x + tankW * a, legTop); ctx.lineTo(x + tankW * b, groundY); });
@@ -1652,10 +1663,6 @@
       ctx.beginPath(); ctx.roundRect(x - tankW / 2, tankTop, tankW, tankH, tankW * 0.12); paint('#E2E8F0', reached);
       ctx.beginPath(); ctx.rect(x - tankW / 2, tankTop + tankH * 0.42, tankW, tankH * 0.16); paint('#38BDF8', reached);
       ctx.beginPath(); ctx.moveTo(x - tankW * 0.58, tankTop); ctx.lineTo(x, topY); ctx.lineTo(x + tankW * 0.58, tankTop); ctx.closePath(); paint('#64748B', reached);
-      ctx.beginPath();ctx.moveTo(x,tankTop+tankH*.16);
-      ctx.bezierCurveTo(x-tankW*.2,tankTop+tankH*.48,x-tankW*.13,tankTop+tankH*.7,x,tankTop+tankH*.7);
-      ctx.bezierCurveTo(x+tankW*.13,tankTop+tankH*.7,x+tankW*.2,tankTop+tankH*.48,x,tankTop+tankH*.16);
-      paint('#168EBC',reached);
       ctx.restore();
       drawObjectLabel(x, topY - 4, "Château d'eau · 40 m", reached);
     }
@@ -1691,7 +1698,7 @@
       const reached = h => appState.totalHeightMeters >= h;
       const X = h => (h === current.height ? leftX : rightX);
 
-      const D = (h, fn) => { if (visible(h)) fn(); };
+      const D = (h, fn) => { if (!visible(h)) return; if (reached(h)) fn(); else asGhost(fn); };
       if (visible(10)) drawCollege(X(10), groundY, heightToCanvasY(10), reached(10));
       D(56, () => drawPisa(X(56), groundY, heightToCanvasY(56), reached(56)));
       D(93, () => drawStatueOfLiberty(X(93), groundY, heightToCanvasY(93), reached(93)));

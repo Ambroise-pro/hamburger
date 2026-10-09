@@ -17,6 +17,7 @@ module.exports = [
       globals: { ...globals.browser, firebase: 'readonly' }
     },
     rules: {
+      'no-unused-vars': ['error', { args: 'none' }],
       'no-eval': 'error',
       'no-implied-eval': 'error',
       'no-new-func': 'error',
